@@ -2,6 +2,8 @@
 package repository
 
 import (
+	"time"
+
 	"github.com/StratWarsAI/strategy-wars/internal/models"
 )
 
@@ -30,4 +32,19 @@ type UserRepositoryInterface interface {
 	Update(user *models.User) error
 	List(limit, offset int) ([]*models.User, error)
 	Delete(id int64) error
+}
+
+// StrategyRepositoryInterface defines the interface for strategy repository operations
+type StrategyRepositoryInterface interface {
+	Save(strategy *models.Strategy) (int64, error)
+	GetByID(id int64) (*models.Strategy, error)
+	ListByUser(userID int64, includePrivate bool, limit, offset int) ([]*models.Strategy, error)
+	ListPublic(limit, offset int) ([]*models.Strategy, error)
+	Update(strategy *models.Strategy) error
+	Delete(id int64) error
+	IncrementVoteCount(id int64) error
+	IncrementWinCount(id int64, winTime time.Time) error
+	SearchByTags(tags []string, limit int) ([]*models.Strategy, error)
+	GetTopVoted(limit int) ([]*models.Strategy, error)
+	GetTopWinners(limit int) ([]*models.Strategy, error)
 }
