@@ -26,12 +26,6 @@ func main() {
 	}
 
 	log.Info("Configuration loaded successfully")
-	log.Info("WebSocket URL: %s", cfg.WebSocket.URL)
-	log.Info("Database: %s@%s:%d/%s",
-		cfg.Database.User,
-		cfg.Database.Host,
-		cfg.Database.Port,
-		cfg.Database.Name)
 
 	// Connect to database
 	dbConfig := database.Config{

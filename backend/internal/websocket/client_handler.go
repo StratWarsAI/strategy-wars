@@ -21,7 +21,7 @@ const (
 	pingPeriod = (pongWait * 9) / 10
 
 	// Maximum message size allowed from peer
-	maxMessageSize = 1024
+	//maxMessageSize = 1024
 )
 
 var upgrader = websocket.Upgrader{
@@ -75,12 +75,15 @@ func (h *ClientWSHandler) ServeWS(w http.ResponseWriter, r *http.Request) {
 func (h *ClientWSHandler) readPump(client *WSClient) {
 	defer func() {
 		client.hub.unregister <- client
-		client.conn.Close()
+		if err := client.conn.Close(); err != nil {
+			h.logger.Error("Error closing connection: %v", err)
+		}
 		h.logger.Info("WebSocket client disconnected")
 	}()
 
-	client.conn.SetReadLimit(maxMessageSize)
-	client.conn.SetReadDeadline(time.Now().Add(pongWait))
+	if err := client.conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
+		h.logger.Error("SetReadDeadline error: %v", err)
+	}
 	client.conn.SetPongHandler(func(string) error {
 		client.conn.SetReadDeadline(time.Now().Add(pongWait))
 		return nil
@@ -105,16 +108,23 @@ func (h *ClientWSHandler) writePump(client *WSClient) {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
-		client.conn.Close()
+		if err := client.conn.Close(); err != nil {
+			h.logger.Error("Error closing connection: %v", err)
+		}
 	}()
 
 	for {
 		select {
 		case message, ok := <-client.send:
-			client.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := client.conn.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
+				h.logger.Error("SetWriteDeadline error: %v", err)
+				return
+			}
 			if !ok {
 				// The hub closed the channel
-				client.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				if err := client.conn.WriteMessage(websocket.CloseMessage, []byte{}); err != nil {
+					h.logger.Debug("Error sending close message: %v", err)
+				}
 				return
 			}
 
@@ -122,7 +132,10 @@ func (h *ClientWSHandler) writePump(client *WSClient) {
 			if err != nil {
 				return
 			}
-			w.Write(message)
+			if _, err := w.Write(message); err != nil {
+				h.logger.Error("Error writing message: %v", err)
+				return
+			}
 
 			// Add queued messages to the current websocket message
 			n := len(client.send)
@@ -135,7 +148,10 @@ func (h *ClientWSHandler) writePump(client *WSClient) {
 				return
 			}
 		case <-ticker.C:
-			client.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := client.conn.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
+				h.logger.Error("SetWriteDeadline error: %v", err)
+				return
+			}
 			if err := client.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}
