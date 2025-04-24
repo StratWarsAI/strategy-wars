@@ -48,3 +48,16 @@ type StrategyRepositoryInterface interface {
 	GetTopVoted(limit int) ([]*models.Strategy, error)
 	GetTopWinners(limit int) ([]*models.Strategy, error)
 }
+
+// DuelRepositoryInterface defines the interface for duel repository operations
+type DuelRepositoryInterface interface {
+	Save(duel *models.Duel) (int64, error)
+	GetByID(id int64) (*models.Duel, error)
+	GetCurrent() (*models.Duel, error)
+	GetUpcoming(limit int) ([]*models.Duel, error)
+	GetPast(limit int) ([]*models.Duel, error)
+	GetByStatus(status string, limit int) ([]*models.Duel, error)
+	GetByTimeRange(start, end time.Time) ([]*models.Duel, error)
+	UpdateStatus(id int64, status string) error
+	UpdateWinner(id int64, strategyID int64) error
+}
