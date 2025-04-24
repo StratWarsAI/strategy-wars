@@ -20,3 +20,14 @@ type TradeRepositoryInterface interface {
 	GetTradesByTokenID(tokenID int64, limit int) ([]*models.Trade, error)
 	GetTradesBySignature(signature string) (*models.Trade, error)
 }
+
+// UserRepositoryInterface defines the interface for user repository operations
+type UserRepositoryInterface interface {
+	Save(user *models.User) (int64, error)
+	GetByID(id int64) (*models.User, error)
+	GetByUsername(username string) (*models.User, error)
+	GetByWalletAddress(walletAddress string) (*models.User, error)
+	Update(user *models.User) error
+	List(limit, offset int) ([]*models.User, error)
+	Delete(id int64) error
+}
