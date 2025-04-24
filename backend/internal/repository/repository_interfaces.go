@@ -61,3 +61,13 @@ type DuelRepositoryInterface interface {
 	UpdateStatus(id int64, status string) error
 	UpdateWinner(id int64, strategyID int64) error
 }
+
+// VoteRepositoryInterface defines the interface for vote repository operations
+type VoteRepositoryInterface interface {
+	Save(vote *models.Vote) (int64, error)
+	GetByUserAndDuel(userID, duelID int64) (*models.Vote, error)
+	GetByDuel(duelID int64) ([]*models.Vote, error)
+	GetVoteCounts(duelID int64) (map[int64]int, error)
+	GetVoteCountsForStrategy(strategyID int64) (int, error)
+	DeleteByUserAndDuel(userID, duelID int64) error
+}
