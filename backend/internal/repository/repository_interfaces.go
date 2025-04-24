@@ -93,3 +93,12 @@ type NotificationRepositoryInterface interface {
 	MarkAllAsRead(userID int64) error
 	Delete(id int64) error
 }
+
+// StrategyMetricRepositoryInterface defines the interface for strategy metric repository operations
+type StrategyMetricRepositoryInterface interface {
+	Save(metric *models.StrategyMetric) (int64, error)
+	GetByID(id int64) (*models.StrategyMetric, error)
+	GetByStrategy(strategyID int64) ([]*models.StrategyMetric, error)
+	GetByDuel(duelID int64) ([]*models.StrategyMetric, error)
+	GetLatestByStrategy(strategyID int64) (*models.StrategyMetric, error)
+}
