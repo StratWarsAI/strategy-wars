@@ -17,8 +17,8 @@ func TestCommentRepositorySave(t *testing.T) {
 		t.Fatalf("Error creating mock: %v", err)
 	}
 	defer func() {
-		if err := db.Close(); err != nil {
-			t.Fatalf("Error closing rows: %v", err)
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("Unfulfilled expectations: %v", err)
 		}
 	}()
 
@@ -64,8 +64,8 @@ func TestCommentRepositoryGetByID(t *testing.T) {
 		t.Fatalf("Error creating mock: %v", err)
 	}
 	defer func() {
-		if err := db.Close(); err != nil {
-			t.Fatalf("Error closing rows: %v", err)
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("Unfulfilled expectations: %v", err)
 		}
 	}()
 
@@ -108,8 +108,8 @@ func TestCommentRepositoryGetByIDNotFound(t *testing.T) {
 		t.Fatalf("Error creating mock: %v", err)
 	}
 	defer func() {
-		if err := db.Close(); err != nil {
-			t.Fatalf("Error closing rows: %v", err)
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("Unfulfilled expectations: %v", err)
 		}
 	}()
 
@@ -142,8 +142,8 @@ func TestCommentRepositoryGetByStrategy(t *testing.T) {
 		t.Fatalf("Error creating mock: %v", err)
 	}
 	defer func() {
-		if err := db.Close(); err != nil {
-			t.Fatalf("Error closing rows: %v", err)
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("Unfulfilled expectations: %v", err)
 		}
 	}()
 
@@ -186,8 +186,8 @@ func TestCommentRepositoryGetByUser(t *testing.T) {
 		t.Fatalf("Error creating mock: %v", err)
 	}
 	defer func() {
-		if err := db.Close(); err != nil {
-			t.Fatalf("Error closing rows: %v", err)
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("Unfulfilled expectations: %v", err)
 		}
 	}()
 
@@ -230,8 +230,8 @@ func TestCommentRepositoryGetReplies(t *testing.T) {
 		t.Fatalf("Error creating mock: %v", err)
 	}
 	defer func() {
-		if err := db.Close(); err != nil {
-			t.Fatalf("Error closing rows: %v", err)
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("Unfulfilled expectations: %v", err)
 		}
 	}()
 
@@ -274,8 +274,8 @@ func TestCommentRepositoryUpdate(t *testing.T) {
 		t.Fatalf("Error creating mock: %v", err)
 	}
 	defer func() {
-		if err := db.Close(); err != nil {
-			t.Fatalf("Error closing rows: %v", err)
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("Unfulfilled expectations: %v", err)
 		}
 	}()
 
@@ -313,8 +313,8 @@ func TestCommentRepositoryUpdateNotFound(t *testing.T) {
 		t.Fatalf("Error creating mock: %v", err)
 	}
 	defer func() {
-		if err := db.Close(); err != nil {
-			t.Fatalf("Error closing rows: %v", err)
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("Unfulfilled expectations: %v", err)
 		}
 	}()
 
@@ -353,8 +353,8 @@ func TestCommentRepositoryDelete(t *testing.T) {
 		t.Fatalf("Error creating mock: %v", err)
 	}
 	defer func() {
-		if err := db.Close(); err != nil {
-			t.Fatalf("Error closing rows: %v", err)
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("Unfulfilled expectations: %v", err)
 		}
 	}()
 
@@ -384,8 +384,8 @@ func TestCommentRepositoryDeleteNotFound(t *testing.T) {
 		t.Fatalf("Error creating mock: %v", err)
 	}
 	defer func() {
-		if err := db.Close(); err != nil {
-			t.Fatalf("Error closing rows: %v", err)
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("Unfulfilled expectations: %v", err)
 		}
 	}()
 

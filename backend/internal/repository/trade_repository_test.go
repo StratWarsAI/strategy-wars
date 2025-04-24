@@ -18,8 +18,8 @@ func TestTradeRepositorySave(t *testing.T) {
 		t.Fatalf("Error creating mock: %v", err)
 	}
 	defer func() {
-		if err := db.Close(); err != nil {
-			t.Fatalf("Error closing db: %v", err)
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("Unfulfilled expectations: %v", err)
 		}
 	}()
 	// Create test trade
@@ -65,8 +65,8 @@ func TestTradeRepositoryGetTradesByTokenID(t *testing.T) {
 		t.Fatalf("Error creating mock: %v", err)
 	}
 	defer func() {
-		if err := db.Close(); err != nil {
-			t.Fatalf("Error closing db: %v", err)
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("Unfulfilled expectations: %v", err)
 		}
 	}()
 
@@ -112,8 +112,8 @@ func TestTradeRepositoryGetTradesBySignature(t *testing.T) {
 		t.Fatalf("Error creating mock: %v", err)
 	}
 	defer func() {
-		if err := db.Close(); err != nil {
-			t.Fatalf("Error closing db: %v", err)
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("Unfulfilled expectations: %v", err)
 		}
 	}()
 
@@ -156,8 +156,8 @@ func TestTradeRepositorySaveConflict(t *testing.T) {
 		t.Fatalf("Error creating mock: %v", err)
 	}
 	defer func() {
-		if err := db.Close(); err != nil {
-			t.Fatalf("Error closing db: %v", err)
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("Unfulfilled expectations: %v", err)
 		}
 	}()
 
@@ -204,8 +204,8 @@ func TestTradeRepositoryGetTradesBySignatureNotFound(t *testing.T) {
 		t.Fatalf("Error creating mock: %v", err)
 	}
 	defer func() {
-		if err := db.Close(); err != nil {
-			t.Fatalf("Error closing db: %v", err)
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("Unfulfilled expectations: %v", err)
 		}
 	}()
 

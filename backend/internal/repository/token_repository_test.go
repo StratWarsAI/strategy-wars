@@ -17,8 +17,8 @@ func TestTokenRepositorySave(t *testing.T) {
 		t.Fatalf("Error creating mock: %v", err)
 	}
 	defer func() {
-		if err := db.Close(); err != nil {
-			t.Fatalf("Error closing db: %v", err)
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("Unfulfilled expectations: %v", err)
 		}
 	}()
 
@@ -79,8 +79,8 @@ func TestTokenRepositoryGetByMintAddress(t *testing.T) {
 		t.Fatalf("Error creating mock: %v", err)
 	}
 	defer func() {
-		if err := db.Close(); err != nil {
-			t.Fatalf("Error closing db: %v", err)
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("Unfulfilled expectations: %v", err)
 		}
 	}()
 
@@ -127,8 +127,8 @@ func TestTokenRepositoryGetRecentTokens(t *testing.T) {
 		t.Fatalf("Error creating mock: %v", err)
 	}
 	defer func() {
-		if err := db.Close(); err != nil {
-			t.Fatalf("Error closing db: %v", err)
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("Unfulfilled expectations: %v", err)
 		}
 	}()
 

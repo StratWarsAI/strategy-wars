@@ -17,8 +17,8 @@ func TestDuelRepositorySave(t *testing.T) {
 		t.Fatalf("Error creating mock: %v", err)
 	}
 	defer func() {
-		if err := db.Close(); err != nil {
-			t.Fatalf("Error closing rows: %v", err)
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("Unfulfilled expectations: %v", err)
 		}
 	}()
 
@@ -69,8 +69,8 @@ func TestDuelRepositoryGetByID(t *testing.T) {
 		t.Fatalf("Error creating mock: %v", err)
 	}
 	defer func() {
-		if err := db.Close(); err != nil {
-			t.Fatalf("Error closing rows: %v", err)
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("Unfulfilled expectations: %v", err)
 		}
 	}()
 
@@ -119,8 +119,8 @@ func TestDuelRepositoryGetCurrent(t *testing.T) {
 		t.Fatalf("Error creating mock: %v", err)
 	}
 	defer func() {
-		if err := db.Close(); err != nil {
-			t.Fatalf("Error closing rows: %v", err)
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("Unfulfilled expectations: %v", err)
 		}
 	}()
 
@@ -164,8 +164,8 @@ func TestDuelRepositoryGetUpcoming(t *testing.T) {
 		t.Fatalf("Error creating mock: %v", err)
 	}
 	defer func() {
-		if err := db.Close(); err != nil {
-			t.Fatalf("Error closing rows: %v", err)
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("Unfulfilled expectations: %v", err)
 		}
 	}()
 
@@ -219,8 +219,8 @@ func TestDuelRepositoryGetPast(t *testing.T) {
 		t.Fatalf("Error creating mock: %v", err)
 	}
 	defer func() {
-		if err := db.Close(); err != nil {
-			t.Fatalf("Error closing rows: %v", err)
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("Unfulfilled expectations: %v", err)
 		}
 	}()
 
@@ -275,8 +275,8 @@ func TestDuelRepositoryGetByStatus(t *testing.T) {
 		t.Fatalf("Error creating mock: %v", err)
 	}
 	defer func() {
-		if err := db.Close(); err != nil {
-			t.Fatalf("Error closing rows: %v", err)
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("Unfulfilled expectations: %v", err)
 		}
 	}()
 
@@ -329,8 +329,8 @@ func TestDuelRepositoryGetByTimeRange(t *testing.T) {
 		t.Fatalf("Error creating mock: %v", err)
 	}
 	defer func() {
-		if err := db.Close(); err != nil {
-			t.Fatalf("Error closing rows: %v", err)
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("Unfulfilled expectations: %v", err)
 		}
 	}()
 
@@ -386,8 +386,8 @@ func TestDuelRepositoryUpdateStatus(t *testing.T) {
 		t.Fatalf("Error creating mock: %v", err)
 	}
 	defer func() {
-		if err := db.Close(); err != nil {
-			t.Fatalf("Error closing rows: %v", err)
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("Unfulfilled expectations: %v", err)
 		}
 	}()
 
@@ -418,8 +418,8 @@ func TestDuelRepositoryUpdateWinner(t *testing.T) {
 		t.Fatalf("Error creating mock: %v", err)
 	}
 	defer func() {
-		if err := db.Close(); err != nil {
-			t.Fatalf("Error closing rows: %v", err)
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("Unfulfilled expectations: %v", err)
 		}
 	}()
 
@@ -450,8 +450,8 @@ func TestDuelRepositoryGetByIDNotFound(t *testing.T) {
 		t.Fatalf("Error creating mock: %v", err)
 	}
 	defer func() {
-		if err := db.Close(); err != nil {
-			t.Fatalf("Error closing rows: %v", err)
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("Unfulfilled expectations: %v", err)
 		}
 	}()
 
@@ -485,7 +485,7 @@ func TestDuelRepositoryGetCurrentWhenNoneActive(t *testing.T) {
 	}
 	defer func() {
 		if err := db.Close(); err != nil {
-			t.Fatalf("Error closing rows: %v", err)
+			t.Logf("Error closing database: %v", err)
 		}
 	}()
 

@@ -16,8 +16,8 @@ func TestUserScoreRepositoryGetByUserID(t *testing.T) {
 		t.Fatalf("Error creating mock: %v", err)
 	}
 	defer func() {
-		if err := db.Close(); err != nil {
-			t.Fatalf("Error closing db: %v", err)
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("Unfulfilled expectations: %v", err)
 		}
 	}()
 
@@ -59,8 +59,8 @@ func TestUserScoreRepositoryGetByUserIDNotFound(t *testing.T) {
 		t.Fatalf("Error creating mock: %v", err)
 	}
 	defer func() {
-		if err := db.Close(); err != nil {
-			t.Fatalf("Error closing db: %v", err)
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("Unfulfilled expectations: %v", err)
 		}
 	}()
 
@@ -103,8 +103,8 @@ func TestUserScoreRepositoryGetTopUsers(t *testing.T) {
 		t.Fatalf("Error creating mock: %v", err)
 	}
 	defer func() {
-		if err := db.Close(); err != nil {
-			t.Fatalf("Error closing db: %v", err)
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("Unfulfilled expectations: %v", err)
 		}
 	}()
 
@@ -147,8 +147,8 @@ func TestUserScoreRepositoryIncrementPoints(t *testing.T) {
 		t.Fatalf("Error creating mock: %v", err)
 	}
 	defer func() {
-		if err := db.Close(); err != nil {
-			t.Fatalf("Error closing db: %v", err)
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("Unfulfilled expectations: %v", err)
 		}
 	}()
 
@@ -184,8 +184,8 @@ func TestUserScoreRepositoryIncrementPointsNewUser(t *testing.T) {
 		t.Fatalf("Error creating mock: %v", err)
 	}
 	defer func() {
-		if err := db.Close(); err != nil {
-			t.Fatalf("Error closing db: %v", err)
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("Unfulfilled expectations: %v", err)
 		}
 	}()
 
@@ -226,8 +226,8 @@ func TestUserScoreRepositoryIncrementWins(t *testing.T) {
 		t.Fatalf("Error creating mock: %v", err)
 	}
 	defer func() {
-		if err := db.Close(); err != nil {
-			t.Fatalf("Error closing db: %v", err)
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("Unfulfilled expectations: %v", err)
 		}
 	}()
 
@@ -262,8 +262,8 @@ func TestUserScoreRepositoryIncrementStrategies(t *testing.T) {
 		t.Fatalf("Error creating mock: %v", err)
 	}
 	defer func() {
-		if err := db.Close(); err != nil {
-			t.Fatalf("Error closing db: %v", err)
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("Unfulfilled expectations: %v", err)
 		}
 	}()
 
@@ -298,8 +298,8 @@ func TestUserScoreRepositoryIncrementVotes(t *testing.T) {
 		t.Fatalf("Error creating mock: %v", err)
 	}
 	defer func() {
-		if err := db.Close(); err != nil {
-			t.Fatalf("Error closing db: %v", err)
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("Unfulfilled expectations: %v", err)
 		}
 	}()
 	// Test data
@@ -333,8 +333,8 @@ func TestUserScoreRepositoryUpdateLastUpdated(t *testing.T) {
 		t.Fatalf("Error creating mock: %v", err)
 	}
 	defer func() {
-		if err := db.Close(); err != nil {
-			t.Fatalf("Error closing db: %v", err)
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("Unfulfilled expectations: %v", err)
 		}
 	}()
 
@@ -369,8 +369,8 @@ func TestUserScoreRepositoryUpdateLastUpdatedNewUser(t *testing.T) {
 		t.Fatalf("Error creating mock: %v", err)
 	}
 	defer func() {
-		if err := db.Close(); err != nil {
-			t.Fatalf("Error closing db: %v", err)
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("Unfulfilled expectations: %v", err)
 		}
 	}()
 	// Test data
