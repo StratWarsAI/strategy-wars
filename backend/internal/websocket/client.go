@@ -59,7 +59,10 @@ func (c *Client) Connect() error {
 	// Send the Socket.IO handshake
 	err = conn.WriteMessage(websocket.TextMessage, []byte("40"))
 	if err != nil {
-		conn.Close()
+		// Properly handle connection closure if handshake fails
+		if closeErr := conn.Close(); closeErr != nil {
+			c.Logger.Error("Error closing connection after handshake failure: %v", closeErr)
+		}
 		return fmt.Errorf("websocket handshake error: %v", err)
 	}
 
@@ -85,7 +88,12 @@ func (c *Client) Listen() {
 					if err := c.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 						c.Logger.Error("WebSocket ping error: %v", err)
 						c.isConnected = false
-						c.Conn.Close()
+
+						// Properly handle connection closure
+						if closeErr := c.Conn.Close(); closeErr != nil {
+							c.Logger.Error("Error closing connection: %v", closeErr)
+						}
+
 						c.mu.Unlock()
 						// Try to reconnect
 						go c.reconnect()
@@ -120,7 +128,10 @@ func (c *Client) Listen() {
 				c.mu.Lock()
 				c.isConnected = false
 				if c.Conn != nil {
-					c.Conn.Close()
+					// Properly handle connection closure
+					if closeErr := c.Conn.Close(); closeErr != nil {
+						c.Logger.Error("Error closing connection: %v", closeErr)
+					}
 					c.Conn = nil
 				}
 				c.mu.Unlock()
@@ -141,20 +152,29 @@ func (c *Client) Listen() {
 func (c *Client) Close() {
 	// Prevent closing done channel multiple times
 	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	select {
 	case <-c.done:
 		// Channel already closed
+		return
 	default:
 		close(c.done)
 	}
 
 	if c.isConnected && c.Conn != nil {
-		c.Conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-		c.Conn.Close()
+		// Properly handle close message and connection closure
+		if err := c.Conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "")); err != nil {
+			c.Logger.Error("Error writing close message: %v", err)
+		}
+
+		if err := c.Conn.Close(); err != nil {
+			c.Logger.Error("Error closing WebSocket connection: %v", err)
+		}
+
 		c.Conn = nil
 	}
 	c.isConnected = false
-	c.mu.Unlock()
 }
 
 // reconnect attempts to reconnect to the WebSocket

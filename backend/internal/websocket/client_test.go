@@ -31,10 +31,18 @@ func setupWebSocketServer(t *testing.T, handler func(conn *websocket.Conn)) *htt
 			t.Fatalf("Failed to upgrade connection: %v", err)
 			return
 		}
-		defer conn.Close()
 
-		// Run the provided handler with the connection
-		handler(conn)
+		// Wrap the handler to ensure connection is closed
+		func() {
+			defer func() {
+				if closeErr := conn.Close(); closeErr != nil {
+					t.Logf("Error closing WebSocket connection: %v", closeErr)
+				}
+			}()
+
+			// Run the provided handler with the connection
+			handler(conn)
+		}()
 	}))
 
 	return server

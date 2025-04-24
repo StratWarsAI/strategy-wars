@@ -17,8 +17,11 @@ func TestTradeRepositorySave(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
-
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing db: %v", err)
+		}
+	}()
 	// Create test trade
 	trade := &models.Trade{
 		TokenID:     1,
@@ -61,7 +64,11 @@ func TestTradeRepositoryGetTradesByTokenID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing db: %v", err)
+		}
+	}()
 
 	// Test data
 	tokenID := int64(1)
@@ -104,7 +111,11 @@ func TestTradeRepositoryGetTradesBySignature(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing db: %v", err)
+		}
+	}()
 
 	// Test data
 	signature := "test-signature-12345"
@@ -144,7 +155,11 @@ func TestTradeRepositorySaveConflict(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing db: %v", err)
+		}
+	}()
 
 	// Create test trade
 	trade := &models.Trade{
@@ -188,7 +203,11 @@ func TestTradeRepositoryGetTradesBySignatureNotFound(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing db: %v", err)
+		}
+	}()
 
 	// Test data
 	signature := "non-existing-signature"

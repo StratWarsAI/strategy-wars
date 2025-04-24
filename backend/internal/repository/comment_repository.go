@@ -7,11 +7,13 @@ import (
 	"time"
 
 	"github.com/StratWarsAI/strategy-wars/internal/models"
+	"github.com/StratWarsAI/strategy-wars/internal/pkg/logger"
 )
 
 // CommentRepository handles database operations for comments
 type CommentRepository struct {
-	db *sql.DB
+	db     *sql.DB
+	logger *logger.Logger
 }
 
 // NewCommentRepository creates a new comment repository
@@ -108,7 +110,11 @@ func (r *CommentRepository) GetByStrategy(strategyID int64, limit, offset int) (
 	if err != nil {
 		return nil, fmt.Errorf("error getting comments for strategy: %v", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			r.logger.Error("Error closing rows: %v", err)
+		}
+	}()
 
 	return r.scanCommentRows(rows)
 }
@@ -127,7 +133,11 @@ func (r *CommentRepository) GetByUser(userID int64, limit, offset int) ([]*model
 	if err != nil {
 		return nil, fmt.Errorf("error getting comments for user: %v", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			r.logger.Error("Error closing rows: %v", err)
+		}
+	}()
 
 	return r.scanCommentRows(rows)
 }
@@ -146,7 +156,11 @@ func (r *CommentRepository) GetReplies(parentID int64, limit, offset int) ([]*mo
 	if err != nil {
 		return nil, fmt.Errorf("error getting replies for comment: %v", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			r.logger.Error("Error closing rows: %v", err)
+		}
+	}()
 
 	return r.scanCommentRows(rows)
 }

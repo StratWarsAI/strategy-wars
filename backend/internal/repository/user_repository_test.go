@@ -16,7 +16,11 @@ func TestUserRepositorySave(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing db: %v", err)
+		}
+	}()
 
 	// Create test user
 	user := &models.User{
@@ -60,7 +64,11 @@ func TestUserRepositoryGetByID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing db: %v", err)
+		}
+	}()
 
 	// Test data
 	userID := int64(1)
@@ -99,8 +107,11 @@ func TestUserRepositoryGetByUsername(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
-
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing db: %v", err)
+		}
+	}()
 	// Test data
 	username := "testuser"
 	now := time.Now()
@@ -136,7 +147,11 @@ func TestUserRepositoryGetByWalletAddress(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing db: %v", err)
+		}
+	}()
 
 	// Test data
 	walletAddress := "wallet123"
@@ -173,7 +188,11 @@ func TestUserRepositoryUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing db: %v", err)
+		}
+	}()
 
 	// Test data
 	user := &models.User{
@@ -217,7 +236,11 @@ func TestUserRepositoryList(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing db: %v", err)
+		}
+	}()
 
 	// Test data
 	limit := 10
@@ -260,7 +283,11 @@ func TestUserRepositoryDelete(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing db: %v", err)
+		}
+	}()
 
 	// Test data
 	userID := int64(1)
@@ -287,7 +314,11 @@ func TestUserRepositoryGetByIDNotFound(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing db: %v", err)
+		}
+	}()
 
 	// Test data
 	userID := int64(999) // Non-existent ID

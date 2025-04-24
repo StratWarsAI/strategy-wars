@@ -82,3 +82,14 @@ type UserScoreRepositoryInterface interface {
 	IncrementVotes(userID int64) error
 	UpdateLastUpdated(userID int64) error
 }
+
+// NotificationRepositoryInterface defines the interface for notification repository operations
+type NotificationRepositoryInterface interface {
+	Save(notification *models.Notification) (int64, error)
+	GetByID(id int64) (*models.Notification, error)
+	GetByUser(userID int64, limit, offset int) ([]*models.Notification, error)
+	GetUnreadByUser(userID int64) ([]*models.Notification, error)
+	MarkAsRead(id int64) error
+	MarkAllAsRead(userID int64) error
+	Delete(id int64) error
+}

@@ -244,7 +244,7 @@ func (s *DataServiceWithMocks) ProcessTradeData(data map[string]interface{}) err
 				// Update token with new market cap info
 				_, err := s.tokenRepo.Save(token)
 				if err != nil {
-					// Continue processing trade even if token update fails
+					return fmt.Errorf("error updating token market cap: %v", err)
 				}
 			}
 		}

@@ -85,7 +85,10 @@ func (h *ClientWSHandler) readPump(client *WSClient) {
 		h.logger.Error("SetReadDeadline error: %v", err)
 	}
 	client.conn.SetPongHandler(func(string) error {
-		client.conn.SetReadDeadline(time.Now().Add(pongWait))
+		err := client.conn.SetReadDeadline(time.Now().Add(pongWait))
+		if err != nil {
+			h.logger.Error("Failed to set read deadline: %v", err)
+		}
 		return nil
 	})
 
@@ -140,8 +143,17 @@ func (h *ClientWSHandler) writePump(client *WSClient) {
 			// Add queued messages to the current websocket message
 			n := len(client.send)
 			for i := 0; i < n; i++ {
-				w.Write([]byte{'\n'})
-				w.Write(<-client.send)
+				_, err := w.Write([]byte{'\n'})
+				if err != nil {
+					h.logger.Error("Failed to write newline: %v", err)
+					return
+				}
+				msg := <-client.send
+				_, err = w.Write(msg)
+				if err != nil {
+					h.logger.Error("Failed to write message: %v", err)
+					return
+				}
 			}
 
 			if err := w.Close(); err != nil {

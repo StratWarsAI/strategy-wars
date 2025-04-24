@@ -6,11 +6,13 @@ import (
 	"fmt"
 
 	"github.com/StratWarsAI/strategy-wars/internal/models"
+	"github.com/StratWarsAI/strategy-wars/internal/pkg/logger"
 )
 
 // TradeRepository handles database operations for trades
 type TradeRepository struct {
-	db *sql.DB
+	db     *sql.DB
+	logger *logger.Logger
 }
 
 // NewTradeRepository creates a new trade repository
@@ -66,7 +68,11 @@ func (r *TradeRepository) GetTradesByTokenID(tokenID int64, limit int) ([]*model
 	if err != nil {
 		return nil, fmt.Errorf("error getting trades: %v", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			r.logger.Error("Error closing rows: %v", err)
+		}
+	}()
 
 	var trades []*models.Trade
 	for rows.Next() {

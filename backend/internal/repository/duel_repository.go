@@ -7,11 +7,13 @@ import (
 	"time"
 
 	"github.com/StratWarsAI/strategy-wars/internal/models"
+	"github.com/StratWarsAI/strategy-wars/internal/pkg/logger"
 )
 
 // DuelRepository handles database operations for duels
 type DuelRepository struct {
-	db *sql.DB
+	db     *sql.DB
+	logger *logger.Logger
 }
 
 // NewDuelRepository creates a new duel repository
@@ -148,7 +150,11 @@ func (r *DuelRepository) GetUpcoming(limit int) ([]*models.Duel, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error getting upcoming duels: %v", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			r.logger.Error("Error closing rows: %v", err)
+		}
+	}()
 
 	return r.scanDuelRows(rows)
 }
@@ -167,7 +173,11 @@ func (r *DuelRepository) GetPast(limit int) ([]*models.Duel, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error getting past duels: %v", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			r.logger.Error("Error closing rows: %v", err)
+		}
+	}()
 
 	return r.scanDuelRows(rows)
 }
@@ -186,7 +196,11 @@ func (r *DuelRepository) GetByStatus(status string, limit int) ([]*models.Duel, 
 	if err != nil {
 		return nil, fmt.Errorf("error getting duels by status: %v", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			r.logger.Error("Error closing rows: %v", err)
+		}
+	}()
 
 	return r.scanDuelRows(rows)
 }
@@ -204,7 +218,11 @@ func (r *DuelRepository) GetByTimeRange(start, end time.Time) ([]*models.Duel, e
 	if err != nil {
 		return nil, fmt.Errorf("error getting duels by time range: %v", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			r.logger.Error("Error closing rows: %v", err)
+		}
+	}()
 
 	return r.scanDuelRows(rows)
 }

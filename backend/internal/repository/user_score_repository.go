@@ -7,11 +7,13 @@ import (
 	"time"
 
 	"github.com/StratWarsAI/strategy-wars/internal/models"
+	"github.com/StratWarsAI/strategy-wars/internal/pkg/logger"
 )
 
 // UserScoreRepository handles database operations for user scores
 type UserScoreRepository struct {
-	db *sql.DB
+	db     *sql.DB
+	logger *logger.Logger
 }
 
 // NewUserScoreRepository creates a new user score repository
@@ -72,7 +74,11 @@ func (r *UserScoreRepository) GetTopUsers(limit int) ([]*models.UserScore, error
 	if err != nil {
 		return nil, fmt.Errorf("error getting top users: %v", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			r.logger.Error("Error closing rows: %v", err)
+		}
+	}()
 
 	var userScores []*models.UserScore
 	for rows.Next() {

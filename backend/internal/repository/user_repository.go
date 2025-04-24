@@ -7,11 +7,13 @@ import (
 	"time"
 
 	"github.com/StratWarsAI/strategy-wars/internal/models"
+	"github.com/StratWarsAI/strategy-wars/internal/pkg/logger"
 )
 
 // UserRepository handles database operations for users
 type UserRepository struct {
-	db *sql.DB
+	db     *sql.DB
+	logger *logger.Logger
 }
 
 // NewUserRepository creates a new user repository
@@ -206,7 +208,11 @@ func (r *UserRepository) List(limit, offset int) ([]*models.User, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error listing users: %v", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			r.logger.Error("Error closing rows: %v", err)
+		}
+	}()
 
 	var users []*models.User
 	for rows.Next() {

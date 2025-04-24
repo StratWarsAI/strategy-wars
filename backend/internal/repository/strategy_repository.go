@@ -7,12 +7,14 @@ import (
 	"time"
 
 	"github.com/StratWarsAI/strategy-wars/internal/models"
+	"github.com/StratWarsAI/strategy-wars/internal/pkg/logger"
 	"github.com/lib/pq"
 )
 
 // StrategyRepository handles database operations for strategies
 type StrategyRepository struct {
-	db *sql.DB
+	db     *sql.DB
+	logger *logger.Logger
 }
 
 // NewStrategyRepository creates a new strategy repository
@@ -140,7 +142,11 @@ func (r *StrategyRepository) ListByUser(userID int64, includePrivate bool, limit
 	if err != nil {
 		return nil, fmt.Errorf("error listing strategies: %v", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			r.logger.Error("Error closing rows: %v", err)
+		}
+	}()
 
 	return r.scanStrategyRows(rows)
 }
@@ -160,7 +166,11 @@ func (r *StrategyRepository) ListPublic(limit, offset int) ([]*models.Strategy, 
 	if err != nil {
 		return nil, fmt.Errorf("error listing public strategies: %v", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			r.logger.Error("Error closing rows: %v", err)
+		}
+	}()
 
 	return r.scanStrategyRows(rows)
 }
@@ -297,7 +307,11 @@ func (r *StrategyRepository) SearchByTags(tags []string, limit int) ([]*models.S
 	if err != nil {
 		return nil, fmt.Errorf("error searching strategies by tags: %v", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			r.logger.Error("Error closing rows: %v", err)
+		}
+	}()
 
 	return r.scanStrategyRows(rows)
 }
@@ -317,7 +331,11 @@ func (r *StrategyRepository) GetTopVoted(limit int) ([]*models.Strategy, error) 
 	if err != nil {
 		return nil, fmt.Errorf("error getting top voted strategies: %v", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			r.logger.Error("Error closing rows: %v", err)
+		}
+	}()
 
 	return r.scanStrategyRows(rows)
 }
@@ -337,7 +355,11 @@ func (r *StrategyRepository) GetTopWinners(limit int) ([]*models.Strategy, error
 	if err != nil {
 		return nil, fmt.Errorf("error getting top winning strategies: %v", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			r.logger.Error("Error closing rows: %v", err)
+		}
+	}()
 
 	return r.scanStrategyRows(rows)
 }

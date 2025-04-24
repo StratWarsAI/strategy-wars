@@ -7,11 +7,13 @@ import (
 	"time"
 
 	"github.com/StratWarsAI/strategy-wars/internal/models"
+	"github.com/StratWarsAI/strategy-wars/internal/pkg/logger"
 )
 
 // VoteRepository handles database operations for votes
 type VoteRepository struct {
-	db *sql.DB
+	db     *sql.DB
+	logger *logger.Logger
 }
 
 // NewVoteRepository creates a new vote repository
@@ -94,7 +96,11 @@ func (r *VoteRepository) GetByDuel(duelID int64) ([]*models.Vote, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error getting votes for duel: %v", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			r.logger.Error("Error closing rows: %v", err)
+		}
+	}()
 
 	var votes []*models.Vote
 	for rows.Next() {
@@ -132,7 +138,11 @@ func (r *VoteRepository) GetVoteCounts(duelID int64) (map[int64]int, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error getting vote counts: %v", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			r.logger.Error("Error closing rows: %v", err)
+		}
+	}()
 
 	voteCounts := make(map[int64]int)
 	for rows.Next() {

@@ -118,7 +118,13 @@ func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
 // healthCheckHandler handles health check requests
 func (s *Server) healthCheckHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(`{"status":"ok"}`))
+	_, err := w.Write([]byte(`{"status":"ok"}`))
+	if err != nil {
+		// Log the error or handle it appropriately
+		s.logger.Error("Failed to write response: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
 }
 
 // Start starts the API server

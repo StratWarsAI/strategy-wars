@@ -7,11 +7,13 @@ import (
 	"time"
 
 	"github.com/StratWarsAI/strategy-wars/internal/models"
+	"github.com/StratWarsAI/strategy-wars/internal/pkg/logger"
 )
 
 // TokenRepository handles database operations for tokens
 type TokenRepository struct {
-	db *sql.DB
+	db     *sql.DB
+	logger *logger.Logger
 }
 
 // NewTokenRepository creates a new token repository
@@ -122,7 +124,11 @@ func (r *TokenRepository) GetRecentTokens(limit int) ([]*models.Token, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error getting recent tokens: %v", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			r.logger.Error("Error closing rows: %v", err)
+		}
+	}()
 
 	var tokens []*models.Token
 	for rows.Next() {
@@ -176,7 +182,11 @@ func (r *TokenRepository) GetFilteredTokens(minMarketCapUSD float64, maxAgeSecon
 	if err != nil {
 		return nil, fmt.Errorf("error getting filtered tokens: %v", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			r.logger.Error("Error closing rows: %v", err)
+		}
+	}()
 
 	var tokens []*models.Token
 	for rows.Next() {
@@ -223,7 +233,11 @@ func (r *TokenRepository) GetByID(tokenID int64) (*models.Token, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error getting token by id: %v", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			r.logger.Error("Error closing rows: %v", err)
+		}
+	}()
 
 	var token models.Token
 	err = r.db.QueryRow(query, tokenID).Scan(

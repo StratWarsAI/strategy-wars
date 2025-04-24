@@ -16,7 +16,11 @@ func TestDuelRepositorySave(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing rows: %v", err)
+		}
+	}()
 
 	// Create test duel
 	now := time.Now()
@@ -64,7 +68,11 @@ func TestDuelRepositoryGetByID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing rows: %v", err)
+		}
+	}()
 
 	// Test data
 	duelID := int64(1)
@@ -110,7 +118,11 @@ func TestDuelRepositoryGetCurrent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing rows: %v", err)
+		}
+	}()
 
 	// Test data
 	duelID := int64(1)
@@ -151,7 +163,11 @@ func TestDuelRepositoryGetUpcoming(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing rows: %v", err)
+		}
+	}()
 
 	// Test data
 	limit := 2
@@ -202,7 +218,11 @@ func TestDuelRepositoryGetPast(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing rows: %v", err)
+		}
+	}()
 
 	// Test data
 	limit := 2
@@ -254,7 +274,11 @@ func TestDuelRepositoryGetByStatus(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing rows: %v", err)
+		}
+	}()
 
 	// Test data
 	status := "voting"
@@ -304,7 +328,11 @@ func TestDuelRepositoryGetByTimeRange(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing rows: %v", err)
+		}
+	}()
 
 	// Test data
 	now := time.Now()
@@ -357,7 +385,11 @@ func TestDuelRepositoryUpdateStatus(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing rows: %v", err)
+		}
+	}()
 
 	// Test data
 	duelID := int64(1)
@@ -385,7 +417,11 @@ func TestDuelRepositoryUpdateWinner(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing rows: %v", err)
+		}
+	}()
 
 	// Test data
 	duelID := int64(1)
@@ -413,7 +449,11 @@ func TestDuelRepositoryGetByIDNotFound(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing rows: %v", err)
+		}
+	}()
 
 	// Test data
 	duelID := int64(999) // Non-existent ID
@@ -443,7 +483,11 @@ func TestDuelRepositoryGetCurrentWhenNoneActive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing rows: %v", err)
+		}
+	}()
 
 	// Setup expected query with no rows returned
 	mock.ExpectQuery(`SELECT (.+) FROM duels WHERE status = 'voting' OR status = 'simulating' ORDER BY start_time ASC LIMIT 1`).

@@ -16,7 +16,11 @@ func TestTokenRepositorySave(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing db: %v", err)
+		}
+	}()
 
 	// Create test token
 	token := &models.Token{
@@ -74,7 +78,11 @@ func TestTokenRepositoryGetByMintAddress(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing db: %v", err)
+		}
+	}()
 
 	// Test data
 	mintAddress := "test-mint-address"
@@ -118,7 +126,11 @@ func TestTokenRepositoryGetRecentTokens(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing db: %v", err)
+		}
+	}()
 
 	// Test data
 	limit := 10

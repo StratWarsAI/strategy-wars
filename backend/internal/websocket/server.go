@@ -13,9 +13,10 @@ import (
 
 // WSClient represents a WebSocket client connected to our server
 type WSClient struct {
-	hub  *WSHub
-	conn *websocket.Conn
-	send chan []byte
+	hub    *WSHub
+	conn   *websocket.Conn
+	send   chan []byte
+	logger *logger.Logger
 }
 
 // WSHub maintains the set of active WebSocket clients
@@ -98,7 +99,11 @@ func (c *WSClient) writePump() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer func() {
 		ticker.Stop()
-		c.conn.Close()
+
+		// Safely close the connection
+		if err := c.conn.Close(); err != nil {
+			c.hub.logger.Error("Error closing WebSocket connection: %v", err)
+		}
 	}()
 
 	for {
@@ -106,27 +111,60 @@ func (c *WSClient) writePump() {
 		case message, ok := <-c.send:
 			if !ok {
 				// The hub closed the channel
-				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				if err := c.conn.WriteMessage(websocket.CloseMessage, []byte{}); err != nil {
+					c.hub.logger.Error("Error writing close message: %v", err)
+				}
 				return
 			}
 
 			w, err := c.conn.NextWriter(websocket.TextMessage)
 			if err != nil {
+				c.hub.logger.Error("Error getting next writer: %v", err)
 				return
 			}
-			w.Write(message)
 
+			// Safely write the message
+			if _, err = w.Write(message); err != nil {
+				c.hub.logger.Error("Failed to write message: %v", err)
+				if closeErr := w.Close(); closeErr != nil {
+					c.hub.logger.Error("Additional error closing writer: %v", closeErr)
+				}
+				return
+			}
+
+			// Process additional queued messages
 			n := len(c.send)
 			for i := 0; i < n; i++ {
-				w.Write([]byte{'\n'})
-				w.Write(<-c.send)
+				// Safely write newline
+				if _, err := w.Write([]byte{'\n'}); err != nil {
+					c.hub.logger.Error("Failed to write newline: %v", err)
+					if closeErr := w.Close(); closeErr != nil {
+						c.hub.logger.Error("Additional error closing writer: %v", closeErr)
+					}
+					return
+				}
+
+				// Safely write queued message
+				queuedMessage := <-c.send
+				if _, err := w.Write(queuedMessage); err != nil {
+					c.hub.logger.Error("Failed to write queued message: %v", err)
+					if closeErr := w.Close(); closeErr != nil {
+						c.hub.logger.Error("Additional error closing writer: %v", closeErr)
+					}
+					return
+				}
 			}
 
+			// Safely close the writer
 			if err := w.Close(); err != nil {
+				c.hub.logger.Error("Failed to close writer: %v", err)
 				return
 			}
+
 		case <-ticker.C:
+			// Safely send ping message
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				c.hub.logger.Error("Failed to send ping: %v", err)
 				return
 			}
 		}
@@ -147,7 +185,15 @@ func ServeWS(hub *WSHub, w http.ResponseWriter, r *http.Request, logger *logger.
 		return
 	}
 
-	client := &WSClient{hub: hub, conn: conn, send: make(chan []byte, 256)}
+	// Create client
+	client := &WSClient{
+		hub:    hub,
+		conn:   conn,
+		send:   make(chan []byte, 256),
+		logger: logger,
+	}
+
+	// Register client
 	client.hub.register <- client
 
 	// Start writing messages to the client

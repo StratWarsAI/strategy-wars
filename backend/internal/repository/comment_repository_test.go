@@ -16,7 +16,11 @@ func TestCommentRepositorySave(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing rows: %v", err)
+		}
+	}()
 
 	// Create test comment
 	now := time.Now()
@@ -59,7 +63,11 @@ func TestCommentRepositoryGetByID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing rows: %v", err)
+		}
+	}()
 
 	// Test data
 	commentID := int64(1)
@@ -99,7 +107,11 @@ func TestCommentRepositoryGetByIDNotFound(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing rows: %v", err)
+		}
+	}()
 
 	// Test data
 	commentID := int64(999)
@@ -129,7 +141,11 @@ func TestCommentRepositoryGetByStrategy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing rows: %v", err)
+		}
+	}()
 
 	// Test data
 	strategyID := int64(1)
@@ -169,7 +185,11 @@ func TestCommentRepositoryGetByUser(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing rows: %v", err)
+		}
+	}()
 
 	// Test data
 	userID := int64(10)
@@ -209,7 +229,11 @@ func TestCommentRepositoryGetReplies(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing rows: %v", err)
+		}
+	}()
 
 	// Test data
 	parentID := int64(1)
@@ -249,7 +273,11 @@ func TestCommentRepositoryUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing rows: %v", err)
+		}
+	}()
 
 	// Test data
 	commentID := int64(1)
@@ -284,7 +312,11 @@ func TestCommentRepositoryUpdateNotFound(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing rows: %v", err)
+		}
+	}()
 
 	// Test data
 	commentID := int64(999)
@@ -320,7 +352,11 @@ func TestCommentRepositoryDelete(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing rows: %v", err)
+		}
+	}()
 
 	// Test data
 	commentID := int64(1)
@@ -347,7 +383,11 @@ func TestCommentRepositoryDeleteNotFound(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing rows: %v", err)
+		}
+	}()
 
 	// Test data
 	commentID := int64(999)

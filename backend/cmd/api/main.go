@@ -41,7 +41,11 @@ func main() {
 		log.Error("Failed to connect to database: %v", err)
 		os.Exit(1)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			log.Error("Error closing db: %v", err)
+		}
+	}()
 	log.Info("Connected to database successfully")
 
 	// Create and start API server

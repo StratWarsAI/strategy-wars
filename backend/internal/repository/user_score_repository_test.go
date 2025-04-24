@@ -15,7 +15,11 @@ func TestUserScoreRepositoryGetByUserID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing db: %v", err)
+		}
+	}()
 
 	// Test data
 	userID := int64(10)
@@ -54,7 +58,11 @@ func TestUserScoreRepositoryGetByUserIDNotFound(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing db: %v", err)
+		}
+	}()
 
 	// Test data
 	userID := int64(10)
@@ -94,7 +102,11 @@ func TestUserScoreRepositoryGetTopUsers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing db: %v", err)
+		}
+	}()
 
 	// Test data
 	limit := 2
@@ -134,7 +146,11 @@ func TestUserScoreRepositoryIncrementPoints(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing db: %v", err)
+		}
+	}()
 
 	// Test data
 	userID := int64(10)
@@ -167,7 +183,11 @@ func TestUserScoreRepositoryIncrementPointsNewUser(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing db: %v", err)
+		}
+	}()
 
 	// Test data
 	userID := int64(10)
@@ -205,7 +225,11 @@ func TestUserScoreRepositoryIncrementWins(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing db: %v", err)
+		}
+	}()
 
 	// Test data
 	userID := int64(10)
@@ -237,7 +261,11 @@ func TestUserScoreRepositoryIncrementStrategies(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing db: %v", err)
+		}
+	}()
 
 	// Test data
 	userID := int64(10)
@@ -269,8 +297,11 @@ func TestUserScoreRepositoryIncrementVotes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
-
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing db: %v", err)
+		}
+	}()
 	// Test data
 	userID := int64(10)
 
@@ -301,7 +332,11 @@ func TestUserScoreRepositoryUpdateLastUpdated(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing db: %v", err)
+		}
+	}()
 
 	// Test data
 	userID := int64(10)
@@ -333,8 +368,11 @@ func TestUserScoreRepositoryUpdateLastUpdatedNewUser(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
-
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing db: %v", err)
+		}
+	}()
 	// Test data
 	userID := int64(10)
 

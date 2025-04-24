@@ -17,7 +17,11 @@ func TestStrategyRepositorySave(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing rows: %v", err)
+		}
+	}()
 
 	// Create test strategy
 	strategy := &models.Strategy{
@@ -72,7 +76,11 @@ func TestStrategyRepositoryGetByID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing rows: %v", err)
+		}
+	}()
 
 	// Test data
 	strategyID := int64(1)
@@ -117,7 +125,11 @@ func TestStrategyRepositoryListByUser(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing rows: %v", err)
+		}
+	}()
 
 	// Test data
 	userID := int64(1)
@@ -167,7 +179,11 @@ func TestStrategyRepositoryListPublic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing rows: %v", err)
+		}
+	}()
 
 	// Test data
 	limit := 10
@@ -215,7 +231,11 @@ func TestStrategyRepositoryUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing rows: %v", err)
+		}
+	}()
 
 	// Test data
 	now := time.Now()
@@ -272,7 +292,11 @@ func TestStrategyRepositoryDelete(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing rows: %v", err)
+		}
+	}()
 
 	// Test data
 	strategyID := int64(1)
@@ -299,7 +323,11 @@ func TestStrategyRepositoryIncrementVoteCount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing rows: %v", err)
+		}
+	}()
 
 	// Test data
 	strategyID := int64(1)
@@ -326,7 +354,11 @@ func TestStrategyRepositoryIncrementWinCount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing rows: %v", err)
+		}
+	}()
 
 	// Test data
 	strategyID := int64(1)
@@ -354,7 +386,11 @@ func TestStrategyRepositorySearchByTags(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing rows: %v", err)
+		}
+	}()
 
 	// Test data
 	tags := []string{"ai", "trading"}
@@ -397,7 +433,11 @@ func TestStrategyRepositoryGetTopVoted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing db: %v", err)
+		}
+	}()
 
 	// Test data
 	limit := 2
@@ -444,7 +484,11 @@ func TestStrategyRepositoryGetTopWinners(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing db: %v", err)
+		}
+	}()
 
 	// Test data
 	limit := 2
