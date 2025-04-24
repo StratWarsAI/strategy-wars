@@ -71,3 +71,14 @@ type VoteRepositoryInterface interface {
 	GetVoteCountsForStrategy(strategyID int64) (int, error)
 	DeleteByUserAndDuel(userID, duelID int64) error
 }
+
+// UserScoreRepositoryInterface defines the interface for user score repository operations
+type UserScoreRepositoryInterface interface {
+	GetByUserID(userID int64) (*models.UserScore, error)
+	GetTopUsers(limit int) ([]*models.UserScore, error)
+	IncrementPoints(userID int64, points int) error
+	IncrementWins(userID int64) error
+	IncrementStrategies(userID int64) error
+	IncrementVotes(userID int64) error
+	UpdateLastUpdated(userID int64) error
+}
