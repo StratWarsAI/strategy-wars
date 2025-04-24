@@ -47,7 +47,7 @@ execute_sql_file() {
     echo -e "${YELLOW}Applying $action migration...${NC}"
     
     # Use docker exec to run psql inside the container
-    cat "$file" | docker exec -i db psql -U "$DB_USER" -d "$DB_NAME"
+    cat "$file" | docker exec -i strategy_postgres psql -U "$DB_USER" -d "$DB_NAME"
     
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}$action migration completed successfully.${NC}"
@@ -61,7 +61,7 @@ execute_sql_file() {
 # Main execution
 echo "=== PostgreSQL Migration Tool ==="
 echo "Database: $DB_NAME"
-echo "Using Docker container: db"
+echo "Using Docker container: strategy_postgres"
 echo
 
 # Simple menu

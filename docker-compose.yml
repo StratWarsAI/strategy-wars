@@ -1,9 +1,7 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:15-alpine
-    container_name: db
+    container_name: strategy_postgres
     environment:
       POSTGRES_DB: ${DB_NAME:-pump_predictor_strategy}
       POSTGRES_USER: ${DB_USER:-pump_user}

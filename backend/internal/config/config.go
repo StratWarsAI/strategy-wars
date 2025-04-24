@@ -36,9 +36,9 @@ type Config struct {
 // LoadConfig loads configuration from .env file
 func LoadConfig() (*Config, error) {
 	// Determine the root directory (assuming the function is called from the root)
-	rootDir, err := os.Getwd()
+	rootDir, err := filepath.Abs("..")
 	if err != nil {
-		return nil, fmt.Errorf("failed to get working directory: %v", err)
+		return nil, fmt.Errorf("failed to determine project root: %v", err)
 	}
 
 	// Load .env file from root
