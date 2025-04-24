@@ -13,8 +13,8 @@ import (
 
 // DataService handles data processing and storage
 type DataService struct {
-	tokenRepo *repository.TokenRepository
-	tradeRepo *repository.TradeRepository
+	tokenRepo repository.TokenRepositoryInterface
+	tradeRepo repository.TradeRepositoryInterface
 	logger    *logger.Logger
 }
 
