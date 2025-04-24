@@ -2,47 +2,73 @@
 package main
 
 import (
-	"fmt"
-	"log"
-	"net/http"
+	"context"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
+
+	"github.com/StratWarsAI/strategy-wars/internal/api"
+	"github.com/StratWarsAI/strategy-wars/internal/config"
+	"github.com/StratWarsAI/strategy-wars/internal/database"
+	"github.com/StratWarsAI/strategy-wars/internal/pkg/logger"
 )
 
 func main() {
-	log.Println("Starting StrategyWars API Server")
+	log := logger.New("api-server")
+	log.Info("Starting StrategyWars API Server")
 
-	// Simple health check endpoint
-	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"status":"ok","message":"StrategyWars API is running"}`))
-	})
-
-	// Start HTTP server
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
+	// Load configuration from .env
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		log.Error("Failed to load configuration: %v", err)
+		os.Exit(1)
 	}
 
-	serverAddr := fmt.Sprintf(":%s", port)
-	server := &http.Server{
-		Addr: serverAddr,
+	log.Info("Configuration loaded successfully")
+
+	// Connect to database
+	dbConfig := database.Config{
+		Host:     cfg.Database.Host,
+		Port:     cfg.Database.Port,
+		User:     cfg.Database.User,
+		Password: cfg.Database.Password,
+		Database: cfg.Database.Name,
 	}
 
-	// Start server in a goroutine
+	db, err := database.Connect(dbConfig)
+	if err != nil {
+		log.Error("Failed to connect to database: %v", err)
+		os.Exit(1)
+	}
+	defer db.Close()
+	log.Info("Connected to database successfully")
+
+	// Create and start API server
+	apiServer := api.NewServer(cfg.Server.Port, db, logger.New("api-server"))
 	go func() {
-		log.Printf("Server listening on %s", serverAddr)
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server error: %v", err)
+		if err := apiServer.Start(); err != nil {
+			log.Error("API server error: %v", err)
 		}
 	}()
+	log.Info("API server started on port %d", cfg.Server.Port)
 
 	// Setup signal handling for graceful shutdown
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// Wait for shutdown signal
-	<-stop
-	log.Println("Shutting down server...")
+	log.Info("API server is now running. Press Ctrl+C to exit")
+	<-sigChan
+	log.Info("Shutting down...")
+
+	// Gracefully shutdown API server
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := apiServer.Stop(ctx); err != nil {
+		log.Error("Error stopping API server: %v", err)
+	}
+
+	// Allow some time for pending operations to complete
+	time.Sleep(2 * time.Second)
 }

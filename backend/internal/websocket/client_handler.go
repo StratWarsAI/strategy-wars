@@ -1,0 +1,232 @@
+// internal/websocket/client_handler.go
+package websocket
+
+import (
+	"encoding/json"
+	"net/http"
+	"time"
+
+	"github.com/StratWarsAI/strategy-wars/internal/pkg/logger"
+	"github.com/gorilla/websocket"
+)
+
+const (
+	// Time allowed to write a message to the peer
+	writeWait = 10 * time.Second
+
+	// Time allowed to read the next pong message from the peer
+	pongWait = 60 * time.Second
+
+	// Send pings to peer with this period
+	pingPeriod = (pongWait * 9) / 10
+
+	// Maximum message size allowed from peer
+	maxMessageSize = 1024
+)
+
+var upgrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+	// Allow all origins for testing, in production you'll want to restrict this
+	CheckOrigin: func(r *http.Request) bool { return true },
+}
+
+// ClientWSHandler handles WebSocket connections from clients
+type ClientWSHandler struct {
+	hub    *WSHub
+	logger *logger.Logger
+}
+
+// NewClientWSHandler creates a new WebSocket client handler
+func NewClientWSHandler(hub *WSHub, logger *logger.Logger) *ClientWSHandler {
+	return &ClientWSHandler{
+		hub:    hub,
+		logger: logger,
+	}
+}
+
+// ServeWS handles WebSocket requests from clients
+func (h *ClientWSHandler) ServeWS(w http.ResponseWriter, r *http.Request) {
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		h.logger.Error("Error upgrading to WebSocket: %v", err)
+		return
+	}
+
+	client := &WSClient{
+		hub:  h.hub,
+		conn: conn,
+		send: make(chan []byte, 256),
+	}
+
+	// Register the client with the hub
+	client.hub.register <- client
+
+	// Start the client's read pump in a goroutine
+	go h.readPump(client)
+
+	// Start the client's write pump in a goroutine
+	go h.writePump(client)
+
+	h.logger.Info("New WebSocket client connected")
+}
+
+// readPump pumps messages from the WebSocket connection to the hub
+func (h *ClientWSHandler) readPump(client *WSClient) {
+	defer func() {
+		client.hub.unregister <- client
+		client.conn.Close()
+		h.logger.Info("WebSocket client disconnected")
+	}()
+
+	client.conn.SetReadLimit(maxMessageSize)
+	client.conn.SetReadDeadline(time.Now().Add(pongWait))
+	client.conn.SetPongHandler(func(string) error {
+		client.conn.SetReadDeadline(time.Now().Add(pongWait))
+		return nil
+	})
+
+	for {
+		_, message, err := client.conn.ReadMessage()
+		if err != nil {
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				h.logger.Error("WebSocket error: %v", err)
+			}
+			break
+		}
+
+		// Handle messages from client
+		h.handleClientMessage(client, message)
+	}
+}
+
+// writePump pumps messages from the hub to the WebSocket connection
+func (h *ClientWSHandler) writePump(client *WSClient) {
+	ticker := time.NewTicker(pingPeriod)
+	defer func() {
+		ticker.Stop()
+		client.conn.Close()
+	}()
+
+	for {
+		select {
+		case message, ok := <-client.send:
+			client.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if !ok {
+				// The hub closed the channel
+				client.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				return
+			}
+
+			w, err := client.conn.NextWriter(websocket.TextMessage)
+			if err != nil {
+				return
+			}
+			w.Write(message)
+
+			// Add queued messages to the current websocket message
+			n := len(client.send)
+			for i := 0; i < n; i++ {
+				w.Write([]byte{'\n'})
+				w.Write(<-client.send)
+			}
+
+			if err := w.Close(); err != nil {
+				return
+			}
+		case <-ticker.C:
+			client.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := client.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
+			}
+		}
+	}
+}
+
+// handleClientMessage processes messages from clients
+func (h *ClientWSHandler) handleClientMessage(client *WSClient, message []byte) {
+	// Parse the message
+	var data map[string]interface{}
+	if err := json.Unmarshal(message, &data); err != nil {
+		h.logger.Error("Error parsing client message: %v", err)
+		return
+	}
+
+	// Get the message type
+	messageType, ok := data["type"].(string)
+	if !ok {
+		h.logger.Error("Invalid message format: missing 'type' field")
+		return
+	}
+
+	// Handle different message types
+	switch messageType {
+	case "subscribe":
+		// Handle subscription to specific strategy updates
+		h.handleSubscribe(client, data)
+
+	case "unsubscribe":
+		// Handle un subscription from strategy updates
+		h.handleUnsubscribe(client, data)
+
+	case "ping":
+		// Handle ping messages
+		h.handlePing(client, data)
+
+	default:
+		h.logger.Debug("Unknown message type: %s", messageType)
+	}
+}
+
+// handleSubscribe handles subscription requests
+func (h *ClientWSHandler) handleSubscribe(client *WSClient, data map[string]interface{}) {
+	// In a real implementation, you'd store subscription info for each client
+	// and only send them relevant updates
+
+	// This is a simple acknowledgment
+	response := map[string]interface{}{
+		"type":    "subscribe_ack",
+		"success": true,
+	}
+
+	if strategyID, ok := data["strategy_id"].(float64); ok {
+		response["strategy_id"] = strategyID
+		h.logger.Info("Client subscribed to strategy %d", int64(strategyID))
+	}
+
+	// Send acknowledgment
+	jsonResponse, _ := json.Marshal(response)
+	client.send <- jsonResponse
+}
+
+// handleUnsubscribe handles un subscription requests
+func (h *ClientWSHandler) handleUnsubscribe(client *WSClient, data map[string]interface{}) {
+	// In a real implementation, you'd remove the subscription
+
+	// This is a simple acknowledgment
+	response := map[string]interface{}{
+		"type":    "unsubscribe_ack",
+		"success": true,
+	}
+
+	if strategyID, ok := data["strategy_id"].(float64); ok {
+		response["strategy_id"] = strategyID
+		h.logger.Info("Client unsubscribed from strategy %d", int64(strategyID))
+	}
+
+	// Send acknowledgment
+	jsonResponse, _ := json.Marshal(response)
+	client.send <- jsonResponse
+}
+
+// handlePing handles ping messages
+func (h *ClientWSHandler) handlePing(client *WSClient, _ map[string]interface{}) {
+	// Send pong response
+	response := map[string]interface{}{
+		"type": "pong",
+		"time": time.Now().Unix(),
+	}
+
+	jsonResponse, _ := json.Marshal(response)
+	client.send <- jsonResponse
+}
