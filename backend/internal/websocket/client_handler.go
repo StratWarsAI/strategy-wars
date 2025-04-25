@@ -3,11 +3,11 @@ package websocket
 
 import (
 	"encoding/json"
-	"net/http"
 	"time"
 
 	"github.com/StratWarsAI/strategy-wars/internal/pkg/logger"
-	"github.com/gorilla/websocket"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/websocket/v2"
 )
 
 const (
@@ -24,13 +24,6 @@ const (
 	//maxMessageSize = 1024
 )
 
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	// Allow all origins for testing, in production you'll want to restrict this
-	CheckOrigin: func(r *http.Request) bool { return true },
-}
-
 // ClientWSHandler handles WebSocket connections from clients
 type ClientWSHandler struct {
 	hub    *WSHub
@@ -46,29 +39,24 @@ func NewClientWSHandler(hub *WSHub, logger *logger.Logger) *ClientWSHandler {
 }
 
 // ServeWS handles WebSocket requests from clients
-func (h *ClientWSHandler) ServeWS(w http.ResponseWriter, r *http.Request) {
-	conn, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		h.logger.Error("Error upgrading to WebSocket: %v", err)
-		return
-	}
+func (h *ClientWSHandler) ServeWS() fiber.Handler {
+	return websocket.New(func(c *websocket.Conn) {
+		client := &WSClient{
+			hub:  h.hub,
+			conn: c,
+			send: make(chan []byte, 256),
+		}
 
-	client := &WSClient{
-		hub:  h.hub,
-		conn: conn,
-		send: make(chan []byte, 256),
-	}
+		client.hub.register <- client
 
-	// Register the client with the hub
-	client.hub.register <- client
+		go h.readPump(client)
+		go h.writePump(client)
 
-	// Start the client's read pump in a goroutine
-	go h.readPump(client)
+		h.logger.Info("New WebSocket client connected")
 
-	// Start the client's write pump in a goroutine
-	go h.writePump(client)
-
-	h.logger.Info("New WebSocket client connected")
+		// Blocking, connection will be closed when this function returns
+		select {}
+	})
 }
 
 // readPump pumps messages from the WebSocket connection to the hub

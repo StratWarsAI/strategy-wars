@@ -13,6 +13,7 @@ import (
 	"github.com/StratWarsAI/strategy-wars/internal/websocket"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
+	fiberWebsocket "github.com/gofiber/websocket/v2"
 )
 
 // Server represents the API server
@@ -82,7 +83,14 @@ func (s *Server) registerRoutes() {
 	s.app.Use(s.loggingMiddleware())
 
 	// WebSocket endpoint
-	//s.router.HandleFunc("/ws", s.wsClientHandler.ServeWS)
+	s.app.Use("/ws", func(c *fiber.Ctx) error {
+		if fiberWebsocket.IsWebSocketUpgrade(c) {
+			c.Locals("allowed", true)
+			return c.Next()
+		}
+		return fiber.ErrUpgradeRequired
+	})
+	s.app.Get("/ws", s.wsClientHandler.ServeWS())
 
 	// Add health check endpoint
 	s.app.Get("/health", func(c *fiber.Ctx) error {

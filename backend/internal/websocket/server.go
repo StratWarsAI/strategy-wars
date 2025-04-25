@@ -3,20 +3,18 @@ package websocket
 
 import (
 	"encoding/json"
-	"net/http"
 	"sync"
 	"time"
 
 	"github.com/StratWarsAI/strategy-wars/internal/pkg/logger"
-	"github.com/gorilla/websocket"
+	"github.com/gofiber/websocket/v2"
 )
 
 // WSClient represents a WebSocket client connected to our server
 type WSClient struct {
-	hub    *WSHub
-	conn   *websocket.Conn
-	send   chan []byte
-	logger *logger.Logger
+	hub  *WSHub
+	conn *websocket.Conn
+	send chan []byte
 }
 
 // WSHub maintains the set of active WebSocket clients
@@ -169,33 +167,4 @@ func (c *WSClient) writePump() {
 			}
 		}
 	}
-}
-
-// ServeWS handles WebSocket requests from clients
-func ServeWS(hub *WSHub, w http.ResponseWriter, r *http.Request, logger *logger.Logger) {
-	upgrader := websocket.Upgrader{
-		CheckOrigin: func(r *http.Request) bool {
-			return true // Allow all connections
-		},
-	}
-
-	conn, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		logger.Error("Error upgrading connection: %v", err)
-		return
-	}
-
-	// Create client
-	client := &WSClient{
-		hub:    hub,
-		conn:   conn,
-		send:   make(chan []byte, 256),
-		logger: logger,
-	}
-
-	// Register client
-	client.hub.register <- client
-
-	// Start writing messages to the client
-	go client.writePump()
 }
