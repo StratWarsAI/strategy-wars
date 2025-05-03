@@ -24,13 +24,13 @@ func NewStrategyMetricRepository(db *sql.DB) *StrategyMetricRepository {
 // Save inserts a strategy metric into the database
 func (r *StrategyMetricRepository) Save(metric *models.StrategyMetric) (int64, error) {
 	query := `
-		INSERT INTO strategy_metrics 
-			(strategy_id, duel_id, win_rate, avg_profit, avg_loss, max_drawdown, 
-			total_trades, successful_trades, risk_score, created_at) 
-		VALUES 
-			($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) 
-		RETURNING id
-	`
+        INSERT INTO strategy_metrics 
+            (strategy_id, simulation_run_id, win_rate, avg_profit, avg_loss, max_drawdown, 
+            total_trades, successful_trades, risk_score, created_at) 
+        VALUES 
+            ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) 
+        RETURNING id
+    `
 
 	now := time.Now()
 	if metric.CreatedAt.IsZero() {
@@ -38,16 +38,16 @@ func (r *StrategyMetricRepository) Save(metric *models.StrategyMetric) (int64, e
 	}
 
 	var id int64
-	var duelID sql.NullInt64
-	if metric.DuelID != nil {
-		duelID.Int64 = *metric.DuelID
-		duelID.Valid = true
+	var simulationRunID sql.NullInt64
+	if metric.SimulationRunID != nil {
+		simulationRunID.Int64 = *metric.SimulationRunID
+		simulationRunID.Valid = true
 	}
 
 	err := r.db.QueryRow(
 		query,
 		metric.StrategyID,
-		duelID,
+		simulationRunID,
 		metric.WinRate,
 		metric.AvgProfit,
 		metric.AvgLoss,
@@ -68,19 +68,19 @@ func (r *StrategyMetricRepository) Save(metric *models.StrategyMetric) (int64, e
 // GetByID retrieves a strategy metric by ID
 func (r *StrategyMetricRepository) GetByID(id int64) (*models.StrategyMetric, error) {
 	query := `
-		SELECT id, strategy_id, duel_id, win_rate, avg_profit, avg_loss, max_drawdown, 
-			total_trades, successful_trades, risk_score, created_at
-		FROM strategy_metrics 
-		WHERE id = $1
-	`
+        SELECT id, strategy_id, simulation_run_id, win_rate, avg_profit, avg_loss, max_drawdown, 
+            total_trades, successful_trades, risk_score, created_at
+        FROM strategy_metrics 
+        WHERE id = $1
+    `
 
 	var metric models.StrategyMetric
-	var duelID sql.NullInt64
+	var simulationRunID sql.NullInt64
 
 	err := r.db.QueryRow(query, id).Scan(
 		&metric.ID,
 		&metric.StrategyID,
-		&duelID,
+		&simulationRunID,
 		&metric.WinRate,
 		&metric.AvgProfit,
 		&metric.AvgLoss,
@@ -98,8 +98,8 @@ func (r *StrategyMetricRepository) GetByID(id int64) (*models.StrategyMetric, er
 		return nil, fmt.Errorf("error getting strategy metric: %v", err)
 	}
 
-	if duelID.Valid {
-		metric.DuelID = &duelID.Int64
+	if simulationRunID.Valid {
+		metric.SimulationRunID = &simulationRunID.Int64
 	}
 
 	return &metric, nil
@@ -108,12 +108,12 @@ func (r *StrategyMetricRepository) GetByID(id int64) (*models.StrategyMetric, er
 // GetByStrategy retrieves metrics for a strategy
 func (r *StrategyMetricRepository) GetByStrategy(strategyID int64) ([]*models.StrategyMetric, error) {
 	query := `
-		SELECT id, strategy_id, duel_id, win_rate, avg_profit, avg_loss, max_drawdown, 
-			total_trades, successful_trades, risk_score, created_at
-		FROM strategy_metrics 
-		WHERE strategy_id = $1
-		ORDER BY created_at DESC
-	`
+        SELECT id, strategy_id, simulation_run_id, win_rate, avg_profit, avg_loss, max_drawdown, 
+            total_trades, successful_trades, risk_score, created_at
+        FROM strategy_metrics 
+        WHERE strategy_id = $1
+        ORDER BY created_at DESC
+    `
 
 	rows, err := r.db.Query(query, strategyID)
 	if err != nil {
@@ -128,19 +128,19 @@ func (r *StrategyMetricRepository) GetByStrategy(strategyID int64) ([]*models.St
 	return r.scanMetricRows(rows)
 }
 
-// GetByDuel retrieves metrics for a duel
-func (r *StrategyMetricRepository) GetByDuel(duelID int64) ([]*models.StrategyMetric, error) {
+// GetBySimulationRun retrieves metrics for a simulation run
+func (r *StrategyMetricRepository) GetBySimulationRun(simulationRunID int64) ([]*models.StrategyMetric, error) {
 	query := `
-		SELECT id, strategy_id, duel_id, win_rate, avg_profit, avg_loss, max_drawdown, 
-			total_trades, successful_trades, risk_score, created_at
-		FROM strategy_metrics 
-		WHERE duel_id = $1
-		ORDER BY created_at DESC
-	`
+        SELECT id, strategy_id, simulation_run_id, win_rate, avg_profit, avg_loss, max_drawdown, 
+            total_trades, successful_trades, risk_score, created_at
+        FROM strategy_metrics 
+        WHERE simulation_run_id = $1
+        ORDER BY created_at DESC
+    `
 
-	rows, err := r.db.Query(query, duelID)
+	rows, err := r.db.Query(query, simulationRunID)
 	if err != nil {
-		return nil, fmt.Errorf("error getting duel metrics: %v", err)
+		return nil, fmt.Errorf("error getting simulation run metrics: %v", err)
 	}
 	defer func() {
 		if err := rows.Close(); err != nil {
@@ -154,21 +154,21 @@ func (r *StrategyMetricRepository) GetByDuel(duelID int64) ([]*models.StrategyMe
 // GetLatestByStrategy retrieves the latest metric for a strategy
 func (r *StrategyMetricRepository) GetLatestByStrategy(strategyID int64) (*models.StrategyMetric, error) {
 	query := `
-		SELECT id, strategy_id, duel_id, win_rate, avg_profit, avg_loss, max_drawdown, 
-			total_trades, successful_trades, risk_score, created_at
-		FROM strategy_metrics 
-		WHERE strategy_id = $1
-		ORDER BY created_at DESC
-		LIMIT 1
-	`
+        SELECT id, strategy_id, simulation_run_id, win_rate, avg_profit, avg_loss, max_drawdown, 
+            total_trades, successful_trades, risk_score, created_at
+        FROM strategy_metrics 
+        WHERE strategy_id = $1
+        ORDER BY created_at DESC
+        LIMIT 1
+    `
 
 	var metric models.StrategyMetric
-	var duelID sql.NullInt64
+	var simulationRunID sql.NullInt64
 
 	err := r.db.QueryRow(query, strategyID).Scan(
 		&metric.ID,
 		&metric.StrategyID,
-		&duelID,
+		&simulationRunID,
 		&metric.WinRate,
 		&metric.AvgProfit,
 		&metric.AvgLoss,
@@ -186,8 +186,8 @@ func (r *StrategyMetricRepository) GetLatestByStrategy(strategyID int64) (*model
 		return nil, fmt.Errorf("error getting latest strategy metric: %v", err)
 	}
 
-	if duelID.Valid {
-		metric.DuelID = &duelID.Int64
+	if simulationRunID.Valid {
+		metric.SimulationRunID = &simulationRunID.Int64
 	}
 
 	return &metric, nil
@@ -199,12 +199,12 @@ func (r *StrategyMetricRepository) scanMetricRows(rows *sql.Rows) ([]*models.Str
 
 	for rows.Next() {
 		var metric models.StrategyMetric
-		var duelID sql.NullInt64
+		var simulationRunID sql.NullInt64
 
 		if err := rows.Scan(
 			&metric.ID,
 			&metric.StrategyID,
-			&duelID,
+			&simulationRunID,
 			&metric.WinRate,
 			&metric.AvgProfit,
 			&metric.AvgLoss,
@@ -217,8 +217,8 @@ func (r *StrategyMetricRepository) scanMetricRows(rows *sql.Rows) ([]*models.Str
 			return nil, fmt.Errorf("error scanning strategy metric row: %v", err)
 		}
 
-		if duelID.Valid {
-			metric.DuelID = &duelID.Int64
+		if simulationRunID.Valid {
+			metric.SimulationRunID = &simulationRunID.Int64
 		}
 
 		metrics = append(metrics, &metric)

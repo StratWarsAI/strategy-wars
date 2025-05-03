@@ -1,6 +1,7 @@
 package dto
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/StratWarsAI/strategy-wars/internal/models"
@@ -54,7 +55,6 @@ func NewStrategyResponseDto(strategy *models.Strategy) StrategyResponseDto {
 		Name:            strategy.Name,
 		Description:     strategy.Description,
 		Config:          strategy.Config,
-		UserID:          strategy.UserID,
 		IsPublic:        strategy.IsPublic,
 		VoteCount:       strategy.VoteCount,
 		WinCount:        strategy.WinCount,
@@ -75,18 +75,33 @@ func NewStrategyResponseDtoList(strategies []models.Strategy) []StrategyResponse
 }
 
 func (dto StrategyCreateDto) ToModel(userID int64) *models.Strategy {
-	return &models.Strategy{
+	// Create a deep copy of rules as a slice of maps
+	rules := make([]map[string]interface{}, len(dto.Config.Rules))
+	for i, rule := range dto.Config.Rules {
+		rules[i] = map[string]interface{}{
+			"condition": rule.Condition,
+			"action":    rule.Action,
+			"priority":  rule.Priority,
+		}
+	}
+
+	// Create the strategy with the converted rules
+	strategy := &models.Strategy{
 		Name:        dto.Name,
 		Description: dto.Description,
 		Config: models.JSONB{
-			"rules":      dto.Config.Rules,
+			"rules":      rules, // Use the converted rules slice
 			"risk_level": dto.Config.RiskLevel,
 		},
-		UserID:     userID,
 		IsPublic:   dto.IsPublic,
 		Tags:       dto.Tags,
 		AIEnhanced: dto.AIEnhanced,
 		CreatedAt:  time.Now(),
 		UpdatedAt:  time.Now(),
 	}
+
+	// Add extra debug log to console
+	fmt.Printf("Config structure in DTO.ToModel: %+v\n", strategy.Config)
+
+	return strategy
 }

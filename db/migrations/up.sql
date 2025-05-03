@@ -1,26 +1,12 @@
 -- Migration Up Script
 
 
--- Create users table
-CREATE TABLE IF NOT EXISTS users (
-    id SERIAL PRIMARY KEY,
-    username TEXT UNIQUE NOT NULL,
-    email TEXT UNIQUE,
-    password_hash TEXT NOT NULL,
-    wallet_address TEXT UNIQUE,
-    avatar_url TEXT,
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
 -- Create strategies table
 CREATE TABLE IF NOT EXISTS strategies (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,
     description TEXT,
     config JSONB NOT NULL,
-    user_id INTEGER,
     is_public BOOLEAN DEFAULT FALSE,
     vote_count INTEGER DEFAULT 0,
     win_count INTEGER DEFAULT 0,
@@ -28,78 +14,21 @@ CREATE TABLE IF NOT EXISTS strategies (
     tags TEXT[],
     complexity_score INTEGER DEFAULT 5,
     risk_score INTEGER DEFAULT 5,
-    ai_enhanced BOOLEAN DEFAULT FALSE,
+    ai_enhanced BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Create duels table (for 10-minute battle periods)
-CREATE TABLE IF NOT EXISTS duels (
+-- Create simulation_runs table
+CREATE TABLE IF NOT EXISTS simulation_runs (
     id SERIAL PRIMARY KEY,
     start_time TIMESTAMP WITH TIME ZONE NOT NULL,
     end_time TIMESTAMP WITH TIME ZONE NOT NULL,
-    voting_end_time TIMESTAMP WITH TIME ZONE NOT NULL,
     winner_strategy_id INTEGER REFERENCES strategies(id),
-    status TEXT NOT NULL, -- 'voting', 'simulating', 'completed'
+    status TEXT NOT NULL, -- 'preparing', 'running', 'completed', 'failed'
+    simulation_parameters JSONB,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- Create votes table (for strategy voting)
-CREATE TABLE IF NOT EXISTS votes (
-    id SERIAL PRIMARY KEY,
-    duel_id INTEGER REFERENCES duels(id) NOT NULL,
-    strategy_id INTEGER REFERENCES strategies(id) NOT NULL,
-    user_id INTEGER REFERENCES users(id) NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    UNIQUE(duel_id, user_id) -- Each user can only vote once per duel
-);
-
--- Create user_scores table (for leaderboard)
-CREATE TABLE IF NOT EXISTS user_scores (
-    user_id INTEGER REFERENCES users(id) PRIMARY KEY,
-    total_points INTEGER DEFAULT 0,
-    win_count INTEGER DEFAULT 0,
-    strategy_count INTEGER DEFAULT 0,
-    vote_count INTEGER DEFAULT 0,
-    last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- Create comments table (for strategy discussions)
-CREATE TABLE IF NOT EXISTS comments (
-    id SERIAL PRIMARY KEY,
-    strategy_id INTEGER REFERENCES strategies(id) NOT NULL,
-    user_id INTEGER REFERENCES users(id) NOT NULL,
-    parent_id INTEGER REFERENCES comments(id),
-    content TEXT NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- Create notifications table
-CREATE TABLE IF NOT EXISTS notifications (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER REFERENCES users(id) NOT NULL,
-    type TEXT NOT NULL, -- 'strategy_win', 'vote', 'comment', etc.
-    content TEXT NOT NULL,
-    is_read BOOLEAN DEFAULT FALSE,
-    related_id INTEGER, -- Could be a strategy_id, duel_id, etc.
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- Create strategy_metrics table (for AI analysis)
-CREATE TABLE IF NOT EXISTS strategy_metrics (
-    id SERIAL PRIMARY KEY,
-    strategy_id INTEGER REFERENCES strategies(id) NOT NULL,
-    duel_id INTEGER REFERENCES duels(id),
-    win_rate DECIMAL(5, 2),
-    avg_profit DECIMAL(10, 2),
-    avg_loss DECIMAL(10, 2),
-    max_drawdown DECIMAL(10, 2),
-    total_trades INTEGER,
-    successful_trades INTEGER,
-    risk_score INTEGER, -- 1-10 score calculated by AI
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Create tokens table
@@ -140,14 +69,14 @@ CREATE TABLE IF NOT EXISTS simulated_trades (
     id SERIAL PRIMARY KEY,
     strategy_id INTEGER REFERENCES strategies(id),
     token_id INTEGER REFERENCES tokens(id),
-    duel_id INTEGER REFERENCES duels(id),
+    simulation_run_id INTEGER REFERENCES simulation_runs(id),
     entry_price DECIMAL(20, 9) NOT NULL,
     exit_price DECIMAL(20, 9),
     entry_timestamp BIGINT NOT NULL,
     exit_timestamp BIGINT,
     position_size DECIMAL(20, 9) NOT NULL,
     profit_loss DECIMAL(20, 9),
-    status TEXT NOT NULL,
+    status TEXT NOT NULL, -- 'open', 'closed', 'canceled'
     exit_reason TEXT,
     entry_usd_market_cap DECIMAL(20, 9) DEFAULT 0,
     exit_usd_market_cap DECIMAL(20, 9) DEFAULT 0,
@@ -155,40 +84,105 @@ CREATE TABLE IF NOT EXISTS simulated_trades (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Users Table
-CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
-CREATE INDEX IF NOT EXISTS idx_users_wallet_address ON users(wallet_address);
+-- Create strategy_metrics table (keep as is, but update reference)
+CREATE TABLE IF NOT EXISTS strategy_metrics (
+    id SERIAL PRIMARY KEY,
+    strategy_id INTEGER REFERENCES strategies(id) NOT NULL,
+    simulation_run_id INTEGER REFERENCES simulation_runs(id),
+    win_rate DECIMAL(5, 2),
+    avg_profit DECIMAL(10, 2),
+    avg_loss DECIMAL(10, 2),
+    max_drawdown DECIMAL(10, 2),
+    total_trades INTEGER,
+    successful_trades INTEGER,
+    risk_score INTEGER,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
 
--- Strategies Table (Combined Index)
-CREATE INDEX IF NOT EXISTS idx_strategies_user_public ON strategies(user_id, is_public);
+-- Create simulation_results table
+CREATE TABLE IF NOT EXISTS simulation_results (
+    id SERIAL PRIMARY KEY,
+    simulation_run_id INTEGER REFERENCES simulation_runs(id),
+    strategy_id INTEGER REFERENCES strategies(id),
+    roi DECIMAL(10, 4),
+    trade_count INTEGER,
+    win_rate DECIMAL(5, 4),
+    max_drawdown DECIMAL(10, 4),
+    performance_rating TEXT, -- 'excellent', 'good', 'average', 'poor', 'very_poor'
+    analysis TEXT,
+    rank INTEGER,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create simulation_events table
+CREATE TABLE IF NOT EXISTS simulation_events (
+    id SERIAL PRIMARY KEY,
+    strategy_id INTEGER NOT NULL REFERENCES strategies(id),
+    simulation_run_id INTEGER NOT NULL REFERENCES simulation_runs(id),
+    event_type TEXT NOT NULL,
+    event_data JSONB NOT NULL,
+    timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create strategy_generations table
+CREATE TABLE IF NOT EXISTS strategy_generations (
+    id SERIAL PRIMARY KEY,
+    generation_number INTEGER,
+    parent_strategy_id INTEGER REFERENCES strategies(id),
+    child_strategy_id INTEGER REFERENCES strategies(id),
+    improvement_reason TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Strategies Table Indexes
 CREATE INDEX IF NOT EXISTS idx_strategies_name ON strategies(name);
+CREATE INDEX IF NOT EXISTS idx_strategies_ai_enhanced ON strategies(ai_enhanced);
+CREATE INDEX IF NOT EXISTS idx_strategies_complexity ON strategies(complexity_score);
+CREATE INDEX IF NOT EXISTS idx_strategies_risk ON strategies(risk_score);
 
--- Duels Table
-CREATE INDEX IF NOT EXISTS idx_duels_status_time ON duels(status, start_time);
+-- Simulation Runs Table Indexes
+CREATE INDEX IF NOT EXISTS idx_simulation_runs_status ON simulation_runs(status);
+CREATE INDEX IF NOT EXISTS idx_simulation_runs_time_range ON simulation_runs(start_time, end_time);
+CREATE INDEX IF NOT EXISTS idx_simulation_runs_winner ON simulation_runs(winner_strategy_id);
 
--- Votes Table
-CREATE INDEX IF NOT EXISTS idx_votes_duel_strategy ON votes(duel_id, strategy_id);
-
--- User Scores Table
-CREATE INDEX IF NOT EXISTS idx_user_scores_points_wins ON user_scores(total_points, win_count);
-
--- Comments Table
-CREATE INDEX IF NOT EXISTS idx_comments_strategy_user ON comments(strategy_id, user_id);
-
--- Notifications Table
-CREATE INDEX IF NOT EXISTS idx_notifications_user_type ON notifications(user_id, type);
-
--- Strategy Metrics Table
-CREATE INDEX IF NOT EXISTS idx_strategy_metrics_duel ON strategy_metrics(duel_id, strategy_id);
-
--- Tokens Table
+-- Tokens Table Indexes
+CREATE INDEX IF NOT EXISTS idx_tokens_mint_address ON tokens(mint_address);
 CREATE INDEX IF NOT EXISTS idx_tokens_creator_timestamp ON tokens(creator_address, created_timestamp);
 CREATE INDEX IF NOT EXISTS idx_tokens_market_cap ON tokens(market_cap);
+CREATE INDEX IF NOT EXISTS idx_tokens_usd_market_cap ON tokens(usd_market_cap);
 
--- Trades Table
+-- Trades Table Indexes
 CREATE INDEX IF NOT EXISTS idx_trades_token_timestamp ON trades(token_id, timestamp);
-CREATE INDEX IF NOT EXISTS idx_trades_user_timestamp ON trades(user_address, timestamp);
+CREATE INDEX IF NOT EXISTS idx_trades_signature ON trades(signature);
+CREATE INDEX IF NOT EXISTS idx_trades_is_buy ON trades(is_buy);
 
--- Simulated Trades Table
+-- Simulated Trades Table Indexes
 CREATE INDEX IF NOT EXISTS idx_simulated_trades_strategy_token ON simulated_trades(strategy_id, token_id);
+CREATE INDEX IF NOT EXISTS idx_simulated_trades_simulation ON simulated_trades(simulation_run_id);
+CREATE INDEX IF NOT EXISTS idx_simulated_trades_status ON simulated_trades(status);
 CREATE INDEX IF NOT EXISTS idx_simulated_trades_timestamps ON simulated_trades(entry_timestamp, exit_timestamp);
+CREATE INDEX IF NOT EXISTS idx_simulated_trades_profit_loss ON simulated_trades(profit_loss);
+
+-- Strategy Metrics Table Indexes
+CREATE INDEX IF NOT EXISTS idx_strategy_metrics_strategy ON strategy_metrics(strategy_id);
+CREATE INDEX IF NOT EXISTS idx_strategy_metrics_simulation ON strategy_metrics(simulation_run_id);
+CREATE INDEX IF NOT EXISTS idx_strategy_metrics_win_rate ON strategy_metrics(win_rate);
+
+-- Simulation Results Table Indexes
+CREATE INDEX IF NOT EXISTS idx_simulation_results_strategy ON simulation_results(strategy_id);
+CREATE INDEX IF NOT EXISTS idx_simulation_results_simulation ON simulation_results(simulation_run_id);
+CREATE INDEX IF NOT EXISTS idx_simulation_results_roi ON simulation_results(roi);
+CREATE INDEX IF NOT EXISTS idx_simulation_results_performance ON simulation_results(performance_rating);
+CREATE INDEX IF NOT EXISTS idx_simulation_results_rank ON simulation_results(simulation_run_id, rank);
+
+-- Simulation Events Table Indexes
+CREATE INDEX IF NOT EXISTS idx_simulation_events_strategy ON simulation_events(strategy_id);
+CREATE INDEX IF NOT EXISTS idx_simulation_events_simulation ON simulation_events(simulation_run_id);
+CREATE INDEX IF NOT EXISTS idx_simulation_events_type ON simulation_events(event_type);
+CREATE INDEX IF NOT EXISTS idx_simulation_events_timestamp ON simulation_events(timestamp);
+
+-- Strategy Generations Table Indexes
+CREATE INDEX IF NOT EXISTS idx_strategy_generations_parent ON strategy_generations(parent_strategy_id);
+CREATE INDEX IF NOT EXISTS idx_strategy_generations_child ON strategy_generations(child_strategy_id);
+CREATE INDEX IF NOT EXISTS idx_strategy_generations_number ON strategy_generations(generation_number);

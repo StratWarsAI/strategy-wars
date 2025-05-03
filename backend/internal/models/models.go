@@ -8,26 +8,12 @@ import (
 	"time"
 )
 
-// User represents a user in the system
-type User struct {
-	ID            int64     `json:"-"`
-	Username      string    `json:"username"`
-	Email         string    `json:"email,omitempty"`
-	PasswordHash  string    `json:"-"`
-	WalletAddress string    `json:"wallet_address,omitempty"`
-	AvatarURL     string    `json:"avatar_url,omitempty"`
-	IsActive      bool      `json:"is_active"`
-	CreatedAt     time.Time `json:"-"`
-	UpdatedAt     time.Time `json:"-"`
-}
-
 // Strategy represents a trading strategy
 type Strategy struct {
 	ID              int64     `json:"-"`
 	Name            string    `json:"name"`
 	Description     string    `json:"description,omitempty"`
 	Config          JSONB     `json:"config"`
-	UserID          int64     `json:"-"`
 	IsPublic        bool      `json:"is_public"`
 	VoteCount       int       `json:"vote_count"`
 	WinCount        int       `json:"win_count"`
@@ -40,64 +26,38 @@ type Strategy struct {
 	UpdatedAt       time.Time `json:"-"`
 }
 
-// Duel represents a 10-minute trading battle
-type Duel struct {
-	ID               int64     `json:"-"`
-	StartTime        time.Time `json:"start_time"`
-	EndTime          time.Time `json:"end_time"`
-	VotingEndTime    time.Time `json:"voting_end_time"`
-	WinnerStrategyID int64     `json:"-"`
-	Status           string    `json:"status"`
-	CreatedAt        time.Time `json:"-"`
-	UpdatedAt        time.Time `json:"-"`
+// Simulation runs a trading simulation
+type SimulationRun struct {
+	ID                   int64     `json:"-"`
+	StartTime            time.Time `json:"start_time"`
+	EndTime              time.Time `json:"end_time"`
+	WinnerStrategyID     int64     `json:"winner_strategy_id,omitempty"`
+	Status               string    `json:"status"` // 'preparing', 'running', 'completed', 'failed'
+	SimulationParameters JSONB     `json:"simulation_parameters,omitempty"`
+	CreatedAt            time.Time `json:"-"`
+	UpdatedAt            time.Time `json:"-"`
 }
 
-// Vote represents a vote for a strategy in a duel
-type Vote struct {
-	ID         int64     `json:"-"`
-	DuelID     int64     `json:"-"`
-	StrategyID int64     `json:"-"`
-	UserID     int64     `json:"-"`
-	CreatedAt  time.Time `json:"-"`
-}
-
-// UserScore represents a user's performance metrics
-type UserScore struct {
-	UserID        int64     `json:"-"`
-	TotalPoints   int       `json:"total_points"`
-	WinCount      int       `json:"win_count"`
-	StrategyCount int       `json:"strategy_count"`
-	VoteCount     int       `json:"vote_count"`
-	LastUpdated   time.Time `json:"last_updated"`
-}
-
-// Comment represents a comment on a strategy
-type Comment struct {
-	ID         int64     `json:"-"`
-	StrategyID int64     `json:"-"`
-	UserID     int64     `json:"-"`
-	ParentID   *int64    `json:"parent_id,omitempty"`
-	Content    string    `json:"content"`
-	CreatedAt  time.Time `json:"-"`
-	UpdatedAt  time.Time `json:"-"`
-}
-
-// Notification represents a system notification
-type Notification struct {
-	ID        int64     `json:"-"`
-	UserID    int64     `json:"-"`
-	Type      string    `json:"type"`
-	Content   string    `json:"content"`
-	IsRead    bool      `json:"is_read"`
-	RelatedID *int64    `json:"related_id,omitempty"`
-	CreatedAt time.Time `json:"-"`
+// SimulationResult represents the result of a simulation
+type SimulationResult struct {
+	ID                int64     `json:"-"`
+	SimulationRunID   int64     `json:"-"`
+	StrategyID        int64     `json:"-"`
+	ROI               float64   `json:"roi"`
+	TradeCount        int       `json:"trade_count"`
+	WinRate           float64   `json:"win_rate"`
+	MaxDrawdown       float64   `json:"max_drawdown"`
+	PerformanceRating string    `json:"performance_rating"` // 'excellent', 'good', 'average', 'poor', 'very_poor'
+	Analysis          string    `json:"analysis,omitempty"`
+	Rank              int       `json:"rank"`
+	CreatedAt         time.Time `json:"-"`
 }
 
 // StrategyMetric represents AI analysis of a strategy
 type StrategyMetric struct {
 	ID               int64     `json:"-"`
 	StrategyID       int64     `json:"-"`
-	DuelID           *int64    `json:"-"`
+	SimulationRunID  *int64    `json:"-"`
 	WinRate          float64   `json:"win_rate"`
 	AvgProfit        float64   `json:"avg_profit"`
 	AvgLoss          float64   `json:"avg_loss"`
@@ -106,6 +66,27 @@ type StrategyMetric struct {
 	SuccessfulTrades int       `json:"successful_trades"`
 	RiskScore        int       `json:"risk_score"`
 	CreatedAt        time.Time `json:"-"`
+}
+
+// SimulationEvent represents events that occur during a simulation
+type SimulationEvent struct {
+	ID              int64     `json:"-"`
+	StrategyID      int64     `json:"-"`
+	SimulationRunID int64     `json:"-"`
+	EventType       string    `json:"event_type"` // "simulation_started", "trade_executed", "trade_closed", etc.
+	EventData       JSONB     `json:"event_data"` // Flexible JSON data structure for event-specific data
+	Timestamp       time.Time `json:"timestamp"`
+	CreatedAt       time.Time `json:"-"`
+}
+
+// Strategy Generation represents a generation of strategies
+type StrategyGeneration struct {
+	ID                int64     `json:"-"`
+	GenerationNumber  int       `json:"generation_number"`
+	ParentStrategyID  int64     `json:"parent_strategy_id"`
+	ChildStrategyID   int64     `json:"child_strategy_id"`
+	ImprovementReason string    `json:"improvement_reason,omitempty"`
+	CreatedAt         time.Time `json:"-"`
 }
 
 // Token represents a Pump.fun token
@@ -146,14 +127,14 @@ type SimulatedTrade struct {
 	ID                int64     `json:"-"`
 	StrategyID        int64     `json:"-"`
 	TokenID           int64     `json:"-"`
-	DuelID            *int64    `json:"-"`
+	SimulationRunID   *int64    `json:"-"`
 	EntryPrice        float64   `json:"entry_price"`
 	ExitPrice         *float64  `json:"exit_price,omitempty"`
 	EntryTimestamp    int64     `json:"entry_timestamp"`
 	ExitTimestamp     *int64    `json:"exit_timestamp,omitempty"`
 	PositionSize      float64   `json:"position_size"`
 	ProfitLoss        *float64  `json:"profit_loss,omitempty"`
-	Status            string    `json:"status"`
+	Status            string    `json:"status"` // 'open', 'closed', 'canceled'
 	ExitReason        *string   `json:"exit_reason,omitempty"`
 	EntryUsdMarketCap float64   `json:"entry_usd_market_cap"`
 	ExitUsdMarketCap  *float64  `json:"exit_usd_market_cap,omitempty"`

@@ -49,13 +49,18 @@ func main() {
 	log.Info("Connected to database successfully")
 
 	// Create and start API server
-	apiServer := api.NewServer(cfg.Server.Port, db, logger.New("api-server"))
+	apiServer := api.NewServer(cfg.Server.Port, db, cfg, logger.New("api-server"))
 	go func() {
-		if err := apiServer.Start(); err != nil {
+		if err := apiServer.Start(cfg.Automation.Enabled); err != nil {
 			log.Error("API server error: %v", err)
 		}
 	}()
 	log.Info("API server started on port %d", cfg.Server.Port)
+	if cfg.Automation.Enabled {
+		log.Info("Automation services are enabled")
+	} else {
+		log.Info("Automation services are disabled")
+	}
 
 	// Setup signal handling for graceful shutdown
 	sigChan := make(chan os.Signal, 1)

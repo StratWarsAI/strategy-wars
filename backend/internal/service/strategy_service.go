@@ -14,24 +14,21 @@ var _ StrategyServiceInterface = (*StrategyService)(nil)
 
 // StrategyService handles business logic for strategies
 type StrategyService struct {
-	strategyRepo  repository.StrategyRepositoryInterface
-	userRepo      repository.UserRepositoryInterface
-	userScoreRepo repository.UserScoreRepositoryInterface
-	logger        *logger.Logger
+	strategyRepo       repository.StrategyRepositoryInterface
+	strategyMetricRepo repository.StrategyMetricRepositoryInterface
+	logger             *logger.Logger
 }
 
 // NewStrategyService creates a new strategy service
 func NewStrategyService(
 	strategyRepo repository.StrategyRepositoryInterface,
-	userRepo repository.UserRepositoryInterface,
-	userScoreRepo repository.UserScoreRepositoryInterface,
+	strategyMetricRepo repository.StrategyMetricRepositoryInterface,
 	logger *logger.Logger,
 ) StrategyServiceInterface {
 	return &StrategyService{
-		strategyRepo:  strategyRepo,
-		userRepo:      userRepo,
-		userScoreRepo: userScoreRepo,
-		logger:        logger,
+		strategyRepo:       strategyRepo,
+		strategyMetricRepo: strategyMetricRepo,
+		logger:             logger,
 	}
 }
 
@@ -40,15 +37,6 @@ func (s *StrategyService) CreateStrategy(strategy *models.Strategy) (int64, erro
 	// Validate the strategy
 	if err := s.validateStrategy(strategy); err != nil {
 		return 0, err
-	}
-
-	// Check if user exists
-	user, err := s.userRepo.GetByID(strategy.UserID)
-	if err != nil {
-		return 0, fmt.Errorf("error checking user: %v", err)
-	}
-	if user == nil {
-		return 0, fmt.Errorf("user not found: %d", strategy.UserID)
 	}
 
 	// Set initial values
@@ -72,13 +60,7 @@ func (s *StrategyService) CreateStrategy(strategy *models.Strategy) (int64, erro
 		return 0, fmt.Errorf("error saving strategy: %v", err)
 	}
 
-	// Update user score (increment strategy count)
-	if err := s.userScoreRepo.IncrementStrategies(strategy.UserID); err != nil {
-		s.logger.Error("Error updating user score: %v", err)
-		// Continue despite error in updating score
-	}
-
-	s.logger.Info("Created strategy with ID %d for user %d", id, strategy.UserID)
+	s.logger.Info("Created strategy with ID %d", id)
 	return id, nil
 }
 
@@ -108,11 +90,6 @@ func (s *StrategyService) UpdateStrategy(strategy *models.Strategy) error {
 		return fmt.Errorf("strategy not found: %d", strategy.ID)
 	}
 
-	// Ensure user owns the strategy
-	if existingStrategy.UserID != strategy.UserID {
-		return fmt.Errorf("user does not own this strategy")
-	}
-
 	// Validate the strategy
 	if err := s.validateStrategy(strategy); err != nil {
 		return err
@@ -133,13 +110,13 @@ func (s *StrategyService) UpdateStrategy(strategy *models.Strategy) error {
 		return fmt.Errorf("error updating strategy: %v", err)
 	}
 
-	s.logger.Info("Updated strategy with ID %d for user %d", strategy.ID, strategy.UserID)
+	s.logger.Info("Updated strategy with ID %d", strategy.ID)
 	return nil
 }
 
 // DeleteStrategy deletes a strategy
-func (s *StrategyService) DeleteStrategy(id int64, userID int64) error {
-	// Validate the strategy exists and belongs to user
+func (s *StrategyService) DeleteStrategy(id int64) error {
+	// Validate the strategy exists
 	strategy, err := s.strategyRepo.GetByID(id)
 	if err != nil {
 		return fmt.Errorf("error checking strategy: %v", err)
@@ -149,23 +126,13 @@ func (s *StrategyService) DeleteStrategy(id int64, userID int64) error {
 		return fmt.Errorf("strategy not found: %d", id)
 	}
 
-	// Ensure user owns the strategy
-	if strategy.UserID != userID {
-		return fmt.Errorf("user does not own this strategy")
-	}
-
 	// Delete strategy
 	if err := s.strategyRepo.Delete(id); err != nil {
 		return fmt.Errorf("error deleting strategy: %v", err)
 	}
 
-	s.logger.Info("Deleted strategy with ID %d for user %d", id, userID)
+	s.logger.Info("Deleted strategy with ID %d", id)
 	return nil
-}
-
-// GetUserStrategies gets all strategies for a user
-func (s *StrategyService) GetUserStrategies(userID int64, includePrivate bool, limit, offset int) ([]*models.Strategy, error) {
-	return s.strategyRepo.ListByUser(userID, includePrivate, limit, offset)
 }
 
 // GetPublicStrategies gets public strategies
@@ -180,14 +147,123 @@ func (s *StrategyService) GetTopStrategies(criteria string, limit int) ([]*model
 		return s.strategyRepo.GetTopVoted(limit)
 	case "wins":
 		return s.strategyRepo.GetTopWinners(limit)
+	case "performance":
+		// New criteria for simulation performance
+		return s.getTopPerformingStrategies(limit)
 	default:
 		return nil, fmt.Errorf("invalid criteria: %s", criteria)
+	}
+}
+
+// getTopPerformingStrategies returns strategies with the best simulation performance
+func (s *StrategyService) getTopPerformingStrategies(limit int) ([]*models.Strategy, error) {
+	// Get all strategy metrics
+	metrics, err := s.getTopPerformingMetrics(limit)
+	if err != nil {
+		return nil, fmt.Errorf("error getting top performing metrics: %v", err)
+	}
+
+	if len(metrics) == 0 {
+		return []*models.Strategy{}, nil
+	}
+
+	// Get unique strategy IDs
+	strategyIDs := make([]int64, 0, len(metrics))
+	seen := make(map[int64]bool)
+	for _, metric := range metrics {
+		if !seen[metric.StrategyID] {
+			strategyIDs = append(strategyIDs, metric.StrategyID)
+			seen[metric.StrategyID] = true
+		}
+	}
+
+	// Get strategies by IDs
+	var strategies []*models.Strategy
+	for _, id := range strategyIDs {
+		strategy, err := s.strategyRepo.GetByID(id)
+		if err != nil {
+			s.logger.Error("Error getting strategy %d: %v", id, err)
+			continue
+		}
+		if strategy != nil {
+			strategies = append(strategies, strategy)
+		}
+		if len(strategies) >= limit {
+			break
+		}
+	}
+
+	return strategies, nil
+}
+
+// getTopPerformingMetrics returns metrics with the best performance
+func (s *StrategyService) getTopPerformingMetrics(limit int) ([]*models.StrategyMetric, error) {
+	// Get all public strategies
+	strategies, err := s.strategyRepo.ListPublic(1000, 0)
+	if err != nil {
+		return nil, fmt.Errorf("error listing strategies: %v", err)
+	}
+
+	// Get latest metrics for each strategy
+	var allMetrics []*models.StrategyMetric
+	for _, strategy := range strategies {
+		metric, err := s.strategyMetricRepo.GetLatestByStrategy(strategy.ID)
+		if err != nil {
+			s.logger.Error("Error getting metrics for strategy %d: %v", strategy.ID, err)
+			continue
+		}
+		if metric != nil {
+			allMetrics = append(allMetrics, metric)
+		}
+	}
+
+	// Sort metrics by performance (win rate in this case)
+	sortMetricsByWinRate(allMetrics)
+
+	// Limit the number of results
+	if len(allMetrics) > limit {
+		allMetrics = allMetrics[:limit]
+	}
+
+	return allMetrics, nil
+}
+
+// sortMetricsByWinRate sorts metrics by win rate in descending order
+func sortMetricsByWinRate(metrics []*models.StrategyMetric) {
+	for i := 0; i < len(metrics); i++ {
+		for j := i + 1; j < len(metrics); j++ {
+			if metrics[i].WinRate < metrics[j].WinRate {
+				metrics[i], metrics[j] = metrics[j], metrics[i]
+			}
+		}
 	}
 }
 
 // SearchStrategiesByTags searches strategies by tags
 func (s *StrategyService) SearchStrategiesByTags(tags []string, limit int) ([]*models.Strategy, error) {
 	return s.strategyRepo.SearchByTags(tags, limit)
+}
+
+// RecordWin records a win for a strategy in a simulation
+func (s *StrategyService) RecordWin(strategyID int64, simulationID int64, winTime time.Time) error {
+	// Update the strategy's win count and last win time
+	if err := s.strategyRepo.IncrementWinCount(strategyID, winTime); err != nil {
+		return fmt.Errorf("error incrementing win count: %v", err)
+	}
+
+	// Record metrics for the win
+	metric := &models.StrategyMetric{
+		StrategyID:      strategyID,
+		SimulationRunID: &simulationID,
+		WinRate:         1.0, // 100% win rate for this simulation
+		CreatedAt:       time.Now(),
+	}
+
+	if _, err := s.strategyMetricRepo.Save(metric); err != nil {
+		return fmt.Errorf("error saving strategy metric: %v", err)
+	}
+
+	return nil
 }
 
 // Private helper methods
@@ -198,15 +274,11 @@ func (s *StrategyService) validateStrategy(strategy *models.Strategy) error {
 		return fmt.Errorf("strategy name is required")
 	}
 
-	if strategy.UserID == 0 {
-		return fmt.Errorf("user ID is required")
-	}
-
 	if len(strategy.Config) == 0 {
 		return fmt.Errorf("strategy configuration is required")
 	}
 
-	// Validate config rules (this would depend on your specific requirements)
+	// Validate config rules
 	if err := s.validateStrategyConfig(strategy.Config); err != nil {
 		return err
 	}
@@ -216,25 +288,134 @@ func (s *StrategyService) validateStrategy(strategy *models.Strategy) error {
 
 // validateStrategyConfig validates the strategy configuration
 func (s *StrategyService) validateStrategyConfig(config models.JSONB) error {
-	// This would contain your specific logic for validating strategy rules
-	// For example:
+	// Log the entire config for debugging
+	s.logger.Info("Validating strategy config: %+v", config)
 
 	// Check if required fields exist
 	if _, ok := config["rules"]; !ok {
+		s.logger.Error("Rules field missing in config")
 		return fmt.Errorf("strategy must contain rules")
 	}
 
-	// Further validation based on your requirements
+	// Validate rules structure
+	rulesInterface, ok := config["rules"]
+	if !ok {
+		s.logger.Error("Rules field missing in config (second check)")
+		return fmt.Errorf("strategy must contain rules")
+	}
 
+	// Log the type of the rules field
+	s.logger.Info("Rules field is of type: %T, value: %+v", rulesInterface, rulesInterface)
+
+	// Try to handle both potential types: []interface{} and []map[string]interface{}
+	var rules []interface{}
+	var rulesLength int
+
+	// First try as []interface{}
+	if rulesAsInterface, ok := rulesInterface.([]interface{}); ok {
+		rules = rulesAsInterface
+		rulesLength = len(rulesAsInterface)
+		s.logger.Info("Rules parsed as []interface{}, length: %d", rulesLength)
+	} else if rulesAsMapSlice, ok := rulesInterface.([]map[string]interface{}); ok {
+		// Convert []map[string]interface{} to []interface{} for compatibility
+		rulesLength = len(rulesAsMapSlice)
+		rules = make([]interface{}, rulesLength)
+		for i, r := range rulesAsMapSlice {
+			rules[i] = r
+		}
+		s.logger.Info("Rules parsed as []map[string]interface{}, length: %d", rulesLength)
+	} else {
+		s.logger.Error("Rules is not an array, type is: %T", rulesInterface)
+		return fmt.Errorf("rules must be an array")
+	}
+
+	if len(rules) == 0 {
+		s.logger.Error("Rules array is empty")
+		return fmt.Errorf("strategy must contain at least one rule")
+	}
+
+	s.logger.Info("Rules array contains %d elements", len(rules))
+
+	// Validate each rule
+	for i, ruleInterface := range rules {
+		s.logger.Info("Validating rule %d: %+v", i, ruleInterface)
+
+		var rule map[string]interface{}
+
+		// Try to get the rule as map[string]interface{} directly
+		if r, ok := ruleInterface.(map[string]interface{}); ok {
+			rule = r
+		} else {
+			s.logger.Error("Rule %d is not a valid object, type: %T", i, ruleInterface)
+			return fmt.Errorf("rule %d is not a valid object", i)
+		}
+
+		// Check required fields
+		condition, conditionOk := rule["condition"].(string)
+		action, actionOk := rule["action"].(string)
+
+		s.logger.Info("Rule %d - condition: '%v' (%t), action: '%v' (%t)",
+			i, rule["condition"], conditionOk, rule["action"], actionOk)
+
+		if !conditionOk || condition == "" {
+			s.logger.Error("Rule %d has invalid condition: %v", i, rule["condition"])
+			return fmt.Errorf("rule %d must have a valid condition", i)
+		}
+
+		if !actionOk || action == "" {
+			s.logger.Error("Rule %d has invalid action: %v", i, rule["action"])
+			return fmt.Errorf("rule %d must have a valid action", i)
+		}
+	}
+
+	// Validate SimulationService required parameters
+	if marketCapThreshold, ok := config["marketCapThreshold"].(float64); !ok || marketCapThreshold <= 0 {
+		s.logger.Warn("marketCapThreshold missing or invalid, using default 5000")
+		config["marketCapThreshold"] = 5000.0
+	}
+
+	if minBuysForEntry, ok := config["minBuysForEntry"].(float64); !ok || minBuysForEntry <= 0 {
+		s.logger.Warn("minBuysForEntry missing or invalid, using default 3")
+		config["minBuysForEntry"] = 3.0
+	}
+
+	if entryTimeWindowSec, ok := config["entryTimeWindowSec"].(float64); !ok || entryTimeWindowSec <= 0 {
+		s.logger.Warn("entryTimeWindowSec missing or invalid, using default 300")
+		config["entryTimeWindowSec"] = 300.0
+	}
+
+	if takeProfitPct, ok := config["takeProfitPct"].(float64); !ok || takeProfitPct <= 0 {
+		s.logger.Warn("takeProfitPct missing or invalid, using default 30")
+		config["takeProfitPct"] = 30.0
+	}
+
+	if stopLossPct, ok := config["stopLossPct"].(float64); !ok || stopLossPct <= 0 {
+		s.logger.Warn("stopLossPct missing or invalid, using default 15")
+		config["stopLossPct"] = 15.0
+	}
+
+	if maxHoldTimeSec, ok := config["maxHoldTimeSec"].(float64); !ok || maxHoldTimeSec <= 0 {
+		s.logger.Warn("maxHoldTimeSec missing or invalid, using default 1800")
+		config["maxHoldTimeSec"] = 1800.0
+	}
+
+	if fixedPositionSizeSol, ok := config["fixedPositionSizeSol"].(float64); !ok || fixedPositionSizeSol <= 0 {
+		s.logger.Warn("fixedPositionSizeSol missing or invalid, using default 0.5")
+		config["fixedPositionSizeSol"] = 0.5
+	}
+
+	if initialBalance, ok := config["initialBalance"].(float64); !ok || initialBalance <= 0 {
+		s.logger.Warn("initialBalance missing or invalid, using default 10")
+		config["initialBalance"] = 10.0
+	}
+
+	s.logger.Info("Strategy config validation successful")
 	return nil
 }
 
 // calculateComplexityScore calculates a complexity score for the strategy
 func (s *StrategyService) calculateComplexityScore(strategy *models.Strategy) int {
-	// This would contain your logic for calculating complexity
-	// For example, based on number of rules, conditions, etc.
-
-	// Placeholder implementation
+	// This would contain logic for calculating complexity
 	rulesInterface, ok := strategy.Config["rules"]
 	if !ok {
 		return 1 // Minimum score
@@ -256,10 +437,7 @@ func (s *StrategyService) calculateComplexityScore(strategy *models.Strategy) in
 
 // calculateRiskScore calculates a risk score for the strategy
 func (s *StrategyService) calculateRiskScore(strategy *models.Strategy) int {
-	// This would contain your logic for calculating risk
-	// For example, based on stop loss settings, position size, etc.
-
-	// Placeholder implementation
+	// This would contain logic for calculating risk
 	riskLevel, ok := strategy.Config["risk_level"]
 	if !ok {
 		return 5 // Default medium risk

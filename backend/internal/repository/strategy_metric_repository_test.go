@@ -24,10 +24,10 @@ func TestStrategyMetricRepositorySave(t *testing.T) {
 
 	// Create test metric
 	now := time.Now()
-	duelID := int64(5)
+	simulationRunID := int64(5)
 	metric := &models.StrategyMetric{
 		StrategyID:       1,
-		DuelID:           &duelID,
+		SimulationRunID:  &simulationRunID,
 		WinRate:          0.75,
 		AvgProfit:        100.50,
 		AvgLoss:          50.25,
@@ -42,7 +42,7 @@ func TestStrategyMetricRepositorySave(t *testing.T) {
 	mock.ExpectQuery(`INSERT INTO strategy_metrics`).
 		WithArgs(
 			metric.StrategyID,
-			sqlmock.AnyArg(), // duel_id (NullInt64)
+			sqlmock.AnyArg(), // simulation_run_id (NullInt64)
 			metric.WinRate,
 			metric.AvgProfit,
 			metric.AvgLoss,
@@ -81,14 +81,14 @@ func TestStrategyMetricRepositoryGetByID(t *testing.T) {
 	// Test data
 	metricID := int64(1)
 	now := time.Now()
-	duelID := int64(5)
+	simulationRunID := int64(5)
 
 	// Setup expected query and result
 	rows := sqlmock.NewRows([]string{
-		"id", "strategy_id", "duel_id", "win_rate", "avg_profit", "avg_loss",
+		"id", "strategy_id", "simulation_run_id", "win_rate", "avg_profit", "avg_loss",
 		"max_drawdown", "total_trades", "successful_trades", "risk_score", "created_at",
 	}).
-		AddRow(metricID, 1, duelID, 0.75, 100.50, 50.25, 200.0, 20, 15, 1, now)
+		AddRow(metricID, 1, simulationRunID, 0.75, 100.50, 50.25, 200.0, 20, 15, 1, now)
 
 	mock.ExpectQuery(`SELECT (.+) FROM strategy_metrics WHERE id = \$1`).
 		WithArgs(metricID).
@@ -105,7 +105,7 @@ func TestStrategyMetricRepositoryGetByID(t *testing.T) {
 	assert.NotNil(t, metric)
 	assert.Equal(t, metricID, metric.ID)
 	assert.Equal(t, int64(1), metric.StrategyID)
-	assert.Equal(t, &duelID, metric.DuelID)
+	assert.Equal(t, &simulationRunID, metric.SimulationRunID)
 	assert.Equal(t, float64(0.75), metric.WinRate)
 	assert.Equal(t, float64(100.50), metric.AvgProfit)
 	assert.Equal(t, float64(50.25), metric.AvgLoss)
@@ -135,7 +135,7 @@ func TestStrategyMetricRepositoryGetByIDNotFound(t *testing.T) {
 	mock.ExpectQuery(`SELECT (.+) FROM strategy_metrics WHERE id = \$1`).
 		WithArgs(metricID).
 		WillReturnRows(sqlmock.NewRows([]string{
-			"id", "strategy_id", "duel_id", "win_rate", "avg_profit", "avg_loss",
+			"id", "strategy_id", "simulation_run_id", "win_rate", "avg_profit", "avg_loss",
 			"max_drawdown", "total_trades", "successful_trades", "risk_score", "created_at",
 		}))
 
@@ -166,16 +166,16 @@ func TestStrategyMetricRepositoryGetByStrategy(t *testing.T) {
 	// Test data
 	strategyID := int64(1)
 	now := time.Now()
-	duelID1 := int64(5)
-	duelID2 := int64(6)
+	simulationRunID1 := int64(5)
+	simulationRunID2 := int64(6)
 
 	// Setup expected query and result
 	rows := sqlmock.NewRows([]string{
-		"id", "strategy_id", "duel_id", "win_rate", "avg_profit", "avg_loss",
+		"id", "strategy_id", "simulation_run_id", "win_rate", "avg_profit", "avg_loss",
 		"max_drawdown", "total_trades", "successful_trades", "risk_score", "created_at",
 	}).
-		AddRow(1, strategyID, duelID1, 0.75, 100.50, 50.25, 200.0, 20, 15, 1, now).
-		AddRow(2, strategyID, duelID2, 0.65, 90.25, 55.75, 180.0, 18, 12, 2, now.Add(1*time.Minute))
+		AddRow(1, strategyID, simulationRunID1, 0.75, 100.50, 50.25, 200.0, 20, 15, 1, now).
+		AddRow(2, strategyID, simulationRunID2, 0.65, 90.25, 55.75, 180.0, 18, 12, 2, now.Add(1*time.Minute))
 
 	mock.ExpectQuery(`SELECT (.+) FROM strategy_metrics WHERE strategy_id = \$1 ORDER BY created_at DESC`).
 		WithArgs(strategyID).
@@ -193,12 +193,12 @@ func TestStrategyMetricRepositoryGetByStrategy(t *testing.T) {
 	assert.Equal(t, 2, len(metrics))
 	assert.Equal(t, int64(1), metrics[0].ID)
 	assert.Equal(t, int64(2), metrics[1].ID)
-	assert.Equal(t, &duelID1, metrics[0].DuelID)
-	assert.Equal(t, &duelID2, metrics[1].DuelID)
+	assert.Equal(t, &simulationRunID1, metrics[0].SimulationRunID)
+	assert.Equal(t, &simulationRunID2, metrics[1].SimulationRunID)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestStrategyMetricRepositoryGetByDuel(t *testing.T) {
+func TestStrategyMetricRepositoryGetBySimulationRun(t *testing.T) {
 	// Setup mock DB
 	db, mock, err := sqlmock.New()
 	if err != nil {
@@ -211,28 +211,28 @@ func TestStrategyMetricRepositoryGetByDuel(t *testing.T) {
 	}()
 
 	// Test data
-	duelID := int64(5)
+	simulationRunID := int64(5)
 	now := time.Now()
 	strategyID1 := int64(1)
 	strategyID2 := int64(2)
 
 	// Setup expected query and result
 	rows := sqlmock.NewRows([]string{
-		"id", "strategy_id", "duel_id", "win_rate", "avg_profit", "avg_loss",
+		"id", "strategy_id", "simulation_run_id", "win_rate", "avg_profit", "avg_loss",
 		"max_drawdown", "total_trades", "successful_trades", "risk_score", "created_at",
 	}).
-		AddRow(1, strategyID1, duelID, 0.75, 100.50, 50.25, 200.0, 20, 15, 1, now).
-		AddRow(2, strategyID2, duelID, 0.65, 90.25, 55.75, 180.0, 18, 12, 2, now.Add(1*time.Minute))
+		AddRow(1, strategyID1, simulationRunID, 0.75, 100.50, 50.25, 200.0, 20, 15, 1, now).
+		AddRow(2, strategyID2, simulationRunID, 0.65, 90.25, 55.75, 180.0, 18, 12, 2, now.Add(1*time.Minute))
 
-	mock.ExpectQuery(`SELECT (.+) FROM strategy_metrics WHERE duel_id = \$1 ORDER BY created_at DESC`).
-		WithArgs(duelID).
+	mock.ExpectQuery(`SELECT (.+) FROM strategy_metrics WHERE simulation_run_id = \$1 ORDER BY created_at DESC`).
+		WithArgs(simulationRunID).
 		WillReturnRows(rows)
 
 	// Create repository with mock DB
 	repo := NewStrategyMetricRepository(db)
 
 	// Execute test
-	metrics, err := repo.GetByDuel(duelID)
+	metrics, err := repo.GetBySimulationRun(simulationRunID)
 
 	// Assert results
 	assert.NoError(t, err)
@@ -260,14 +260,14 @@ func TestStrategyMetricRepositoryGetLatestByStrategy(t *testing.T) {
 	// Test data
 	strategyID := int64(1)
 	now := time.Now()
-	duelID := int64(5)
+	simulationRunID := int64(5)
 
 	// Setup expected query and result
 	rows := sqlmock.NewRows([]string{
-		"id", "strategy_id", "duel_id", "win_rate", "avg_profit", "avg_loss",
+		"id", "strategy_id", "simulation_run_id", "win_rate", "avg_profit", "avg_loss",
 		"max_drawdown", "total_trades", "successful_trades", "risk_score", "created_at",
 	}).
-		AddRow(1, strategyID, duelID, 0.75, 100.50, 50.25, 200.0, 20, 15, 1, now)
+		AddRow(1, strategyID, simulationRunID, 0.75, 100.50, 50.25, 200.0, 20, 15, 1, now)
 
 	mock.ExpectQuery(`SELECT (.+) FROM strategy_metrics WHERE strategy_id = \$1 ORDER BY created_at DESC LIMIT 1`).
 		WithArgs(strategyID).
@@ -284,7 +284,7 @@ func TestStrategyMetricRepositoryGetLatestByStrategy(t *testing.T) {
 	assert.NotNil(t, metric)
 	assert.Equal(t, int64(1), metric.ID)
 	assert.Equal(t, strategyID, metric.StrategyID)
-	assert.Equal(t, &duelID, metric.DuelID)
+	assert.Equal(t, &simulationRunID, metric.SimulationRunID)
 	assert.Equal(t, float64(0.75), metric.WinRate)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
@@ -308,7 +308,7 @@ func TestStrategyMetricRepositoryGetLatestByStrategyNotFound(t *testing.T) {
 	mock.ExpectQuery(`SELECT (.+) FROM strategy_metrics WHERE strategy_id = \$1 ORDER BY created_at DESC LIMIT 1`).
 		WithArgs(strategyID).
 		WillReturnRows(sqlmock.NewRows([]string{
-			"id", "strategy_id", "duel_id", "win_rate", "avg_profit", "avg_loss",
+			"id", "strategy_id", "simulation_run_id", "win_rate", "avg_profit", "avg_loss",
 			"max_drawdown", "total_trades", "successful_trades", "risk_score", "created_at",
 		}))
 

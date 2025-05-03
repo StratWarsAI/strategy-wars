@@ -29,24 +29,44 @@ func NewStrategyHandler(
 }
 
 func (h *StrategyHandler) Create(c *fiber.Ctx) error {
+	// Log the raw request body for debugging
+	body := c.Body()
+	h.logger.Info("Received raw request body: %s", string(body))
+	
 	// Parse request body into DTO
 	var createDto dto.StrategyCreateDto
 	if err := c.BodyParser(&createDto); err != nil {
 		h.logger.Error("Error decoding strategy: %v", err)
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid request body",
+			"error": "Invalid request body: " + err.Error(),
 		})
 	}
+	
+	// Log the parsed DTO for debugging
+	h.logger.Info("Parsed DTO: %+v", createDto)
 
 	// Validate DTO
 	if err := h.validator.Struct(createDto); err != nil {
-		validationErrors := err.(validator.ValidationErrors)
-		errorMessages := make([]string, 0, len(validationErrors))
-		for _, e := range validationErrors {
-			errorMessages = append(errorMessages,
-				fmt.Sprintf("%s validation failed: %s", e.Field(), e.Tag()),
-			)
+		// Try to cast to ValidationErrors, but handle the case where it might be a different error type
+		var errorMessages []string
+		if validationErrors, ok := err.(validator.ValidationErrors); ok {
+			errorMessages = make([]string, 0, len(validationErrors))
+			for _, e := range validationErrors {
+				errorMessages = append(errorMessages,
+					fmt.Sprintf("%s validation failed: %s (value: %v)", e.Field(), e.Tag(), e.Value()),
+				)
+				h.logger.Error("Validation error: Field '%s', Tag '%s', Value '%v', Namespace '%s'", 
+					e.Field(), e.Tag(), e.Value(), e.Namespace())
+			}
+		} else {
+			// Generic error handling for non-validation errors
+			errorMessages = []string{err.Error()}
+			h.logger.Error("Non-validation error during validation: %v", err)
 		}
+		
+		// Log the actual content of the config for debugging
+		h.logger.Error("Config content: %+v", createDto.Config)
+		
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"errors": errorMessages,
 		})

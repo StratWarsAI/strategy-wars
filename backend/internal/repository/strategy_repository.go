@@ -26,10 +26,10 @@ func NewStrategyRepository(db *sql.DB) *StrategyRepository {
 func (r *StrategyRepository) Save(strategy *models.Strategy) (int64, error) {
 	query := `
 		INSERT INTO strategies 
-			(name, description, config, user_id, is_public, vote_count, win_count, 
+			(name, description, config, is_public, vote_count, win_count, 
 			last_win_time, tags, complexity_score, risk_score, ai_enhanced, created_at, updated_at) 
 		VALUES 
-			($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) 
+			($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		RETURNING id
 	`
 
@@ -45,7 +45,6 @@ func (r *StrategyRepository) Save(strategy *models.Strategy) (int64, error) {
 		strategy.Name,
 		strategy.Description,
 		strategy.Config,
-		strategy.UserID,
 		strategy.IsPublic,
 		strategy.VoteCount,
 		strategy.WinCount,
@@ -68,7 +67,7 @@ func (r *StrategyRepository) Save(strategy *models.Strategy) (int64, error) {
 // GetByID retrieves a strategy by its ID
 func (r *StrategyRepository) GetByID(id int64) (*models.Strategy, error) {
 	query := `
-		SELECT id, name, description, config, user_id, is_public, vote_count, win_count, 
+		SELECT id, name, description, config, is_public, vote_count, win_count, 
 			last_win_time, tags, complexity_score, risk_score, ai_enhanced, created_at, updated_at
 		FROM strategies 
 		WHERE id = $1
@@ -82,7 +81,6 @@ func (r *StrategyRepository) GetByID(id int64) (*models.Strategy, error) {
 		&strategy.Name,
 		&strategy.Description,
 		&strategy.Config,
-		&strategy.UserID,
 		&strategy.IsPublic,
 		&strategy.VoteCount,
 		&strategy.WinCount,
@@ -109,52 +107,10 @@ func (r *StrategyRepository) GetByID(id int64) (*models.Strategy, error) {
 	return &strategy, nil
 }
 
-// ListByUser retrieves strategies for a specific user
-func (r *StrategyRepository) ListByUser(userID int64, includePrivate bool, limit, offset int) ([]*models.Strategy, error) {
-	var query string
-	var args []interface{}
-
-	if includePrivate {
-		// All user strategies (private and public)
-		query = `
-			SELECT id, name, description, config, user_id, is_public, vote_count, win_count, 
-				last_win_time, tags, complexity_score, risk_score, ai_enhanced, created_at, updated_at
-			FROM strategies 
-			WHERE user_id = $1
-			ORDER BY updated_at DESC
-			LIMIT $2 OFFSET $3
-		`
-		args = append(args, userID, limit, offset)
-	} else {
-		// Only public user strategies
-		query = `
-			SELECT id, name, description, config, user_id, is_public, vote_count, win_count, 
-				last_win_time, tags, complexity_score, risk_score, ai_enhanced, created_at, updated_at
-			FROM strategies 
-			WHERE user_id = $1 AND is_public = true
-			ORDER BY updated_at DESC
-			LIMIT $2 OFFSET $3
-		`
-		args = append(args, userID, limit, offset)
-	}
-
-	rows, err := r.db.Query(query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("error listing strategies: %v", err)
-	}
-	defer func() {
-		if err := rows.Close(); err != nil {
-			r.logger.Error("Error closing rows: %v", err)
-		}
-	}()
-
-	return r.scanStrategyRows(rows)
-}
-
 // ListPublic retrieves public strategies
 func (r *StrategyRepository) ListPublic(limit, offset int) ([]*models.Strategy, error) {
 	query := `
-		SELECT id, name, description, config, user_id, is_public, vote_count, win_count, 
+		SELECT id, name, description, config, is_public, vote_count, win_count, 
 			last_win_time, tags, complexity_score, risk_score, ai_enhanced, created_at, updated_at
 		FROM strategies 
 		WHERE is_public = true
@@ -179,10 +135,10 @@ func (r *StrategyRepository) ListPublic(limit, offset int) ([]*models.Strategy, 
 func (r *StrategyRepository) Update(strategy *models.Strategy) error {
 	query := `
 		UPDATE strategies 
-		SET name = $1, description = $2, config = $3, user_id = $4, is_public = $5, 
-			vote_count = $6, win_count = $7, last_win_time = $8, tags = $9, 
-			complexity_score = $10, risk_score = $11, ai_enhanced = $12, updated_at = $13
-		WHERE id = $14
+        SET name = $1, description = $2, config = $3, is_public = $4, 
+            vote_count = $5, win_count = $6, last_win_time = $7, tags = $8, 
+            complexity_score = $9, risk_score = $10, ai_enhanced = $11, updated_at = $12
+        WHERE id = $13
 	`
 
 	strategy.UpdatedAt = time.Now()
@@ -192,7 +148,6 @@ func (r *StrategyRepository) Update(strategy *models.Strategy) error {
 		strategy.Name,
 		strategy.Description,
 		strategy.Config,
-		strategy.UserID,
 		strategy.IsPublic,
 		strategy.VoteCount,
 		strategy.WinCount,
@@ -295,7 +250,7 @@ func (r *StrategyRepository) IncrementWinCount(id int64, winTime time.Time) erro
 // SearchByTags searches strategies by tags
 func (r *StrategyRepository) SearchByTags(tags []string, limit int) ([]*models.Strategy, error) {
 	query := `
-		SELECT id, name, description, config, user_id, is_public, vote_count, win_count, 
+		SELECT id, name, description, config, is_public, vote_count, win_count, 
 			last_win_time, tags, complexity_score, risk_score, ai_enhanced, created_at, updated_at
 		FROM strategies 
 		WHERE is_public = true AND tags && $1
@@ -319,7 +274,7 @@ func (r *StrategyRepository) SearchByTags(tags []string, limit int) ([]*models.S
 // GetTopVoted retrieves top voted strategies
 func (r *StrategyRepository) GetTopVoted(limit int) ([]*models.Strategy, error) {
 	query := `
-		SELECT id, name, description, config, user_id, is_public, vote_count, win_count, 
+		SELECT id, name, description, config, is_public, vote_count, win_count, 
 			last_win_time, tags, complexity_score, risk_score, ai_enhanced, created_at, updated_at
 		FROM strategies 
 		WHERE is_public = true
@@ -343,7 +298,7 @@ func (r *StrategyRepository) GetTopVoted(limit int) ([]*models.Strategy, error) 
 // GetTopWinners retrieves top winning strategies
 func (r *StrategyRepository) GetTopWinners(limit int) ([]*models.Strategy, error) {
 	query := `
-		SELECT id, name, description, config, user_id, is_public, vote_count, win_count, 
+		SELECT id, name, description, config, is_public, vote_count, win_count, 
 			last_win_time, tags, complexity_score, risk_score, ai_enhanced, created_at, updated_at
 		FROM strategies 
 		WHERE is_public = true
@@ -377,7 +332,6 @@ func (r *StrategyRepository) scanStrategyRows(rows *sql.Rows) ([]*models.Strateg
 			&strategy.Name,
 			&strategy.Description,
 			&strategy.Config,
-			&strategy.UserID,
 			&strategy.IsPublic,
 			&strategy.VoteCount,
 			&strategy.WinCount,

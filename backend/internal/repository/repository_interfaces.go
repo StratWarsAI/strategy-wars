@@ -2,6 +2,7 @@
 package repository
 
 import (
+	"context"
 	"time"
 
 	"github.com/StratWarsAI/strategy-wars/internal/models"
@@ -23,22 +24,10 @@ type TradeRepositoryInterface interface {
 	GetTradesBySignature(signature string) (*models.Trade, error)
 }
 
-// UserRepositoryInterface defines the interface for user repository operations
-type UserRepositoryInterface interface {
-	Save(user *models.User) (int64, error)
-	GetByID(id int64) (*models.User, error)
-	GetByUsername(username string) (*models.User, error)
-	GetByWalletAddress(walletAddress string) (*models.User, error)
-	Update(user *models.User) error
-	List(limit, offset int) ([]*models.User, error)
-	Delete(id int64) error
-}
-
 // StrategyRepositoryInterface defines the interface for strategy repository operations
 type StrategyRepositoryInterface interface {
 	Save(strategy *models.Strategy) (int64, error)
 	GetByID(id int64) (*models.Strategy, error)
-	ListByUser(userID int64, includePrivate bool, limit, offset int) ([]*models.Strategy, error)
 	ListPublic(limit, offset int) ([]*models.Strategy, error)
 	Update(strategy *models.Strategy) error
 	Delete(id int64) error
@@ -49,56 +38,70 @@ type StrategyRepositoryInterface interface {
 	GetTopWinners(limit int) ([]*models.Strategy, error)
 }
 
-// DuelRepositoryInterface defines the interface for duel repository operations
-type DuelRepositoryInterface interface {
-	Save(duel *models.Duel) (int64, error)
-	GetByID(id int64) (*models.Duel, error)
-	GetCurrent() (*models.Duel, error)
-	GetUpcoming(limit int) ([]*models.Duel, error)
-	GetPast(limit int) ([]*models.Duel, error)
-	GetByStatus(status string, limit int) ([]*models.Duel, error)
-	GetByTimeRange(start, end time.Time) ([]*models.Duel, error)
-	UpdateStatus(id int64, status string) error
-	UpdateWinner(id int64, strategyID int64) error
-}
-
-// VoteRepositoryInterface defines the interface for vote repository operations
-type VoteRepositoryInterface interface {
-	Save(vote *models.Vote) (int64, error)
-	GetByUserAndDuel(userID, duelID int64) (*models.Vote, error)
-	GetByDuel(duelID int64) ([]*models.Vote, error)
-	GetVoteCounts(duelID int64) (map[int64]int, error)
-	GetVoteCountsForStrategy(strategyID int64) (int, error)
-	DeleteByUserAndDuel(userID, duelID int64) error
-}
-
-// UserScoreRepositoryInterface defines the interface for user score repository operations
-type UserScoreRepositoryInterface interface {
-	GetByUserID(userID int64) (*models.UserScore, error)
-	GetTopUsers(limit int) ([]*models.UserScore, error)
-	IncrementPoints(userID int64, points int) error
-	IncrementWins(userID int64) error
-	IncrementStrategies(userID int64) error
-	IncrementVotes(userID int64) error
-	UpdateLastUpdated(userID int64) error
-}
-
-// NotificationRepositoryInterface defines the interface for notification repository operations
-type NotificationRepositoryInterface interface {
-	Save(notification *models.Notification) (int64, error)
-	GetByID(id int64) (*models.Notification, error)
-	GetByUser(userID int64, limit, offset int) ([]*models.Notification, error)
-	GetUnreadByUser(userID int64) ([]*models.Notification, error)
-	MarkAsRead(id int64) error
-	MarkAllAsRead(userID int64) error
-	Delete(id int64) error
-}
-
 // StrategyMetricRepositoryInterface defines the interface for strategy metric repository operations
 type StrategyMetricRepositoryInterface interface {
 	Save(metric *models.StrategyMetric) (int64, error)
 	GetByID(id int64) (*models.StrategyMetric, error)
 	GetByStrategy(strategyID int64) ([]*models.StrategyMetric, error)
-	GetByDuel(duelID int64) ([]*models.StrategyMetric, error)
+	GetBySimulationRun(simulationRunID int64) ([]*models.StrategyMetric, error)
 	GetLatestByStrategy(strategyID int64) (*models.StrategyMetric, error)
+}
+
+// SimulationRunRepositoryInterface for managing simulation runs
+type SimulationRunRepositoryInterface interface {
+	Save(run *models.SimulationRun) (int64, error)
+	GetByID(id int64) (*models.SimulationRun, error)
+	GetCurrent() (*models.SimulationRun, error)
+	GetByStatus(status string, limit int) ([]*models.SimulationRun, error)
+	GetByTimeRange(start, end time.Time) ([]*models.SimulationRun, error)
+	UpdateStatus(id int64, status string) error
+	UpdateWinner(id int64, strategyID int64) error
+}
+
+// SimulationResultRepositoryInterface for managing simulation results
+type SimulationResultRepositoryInterface interface {
+	Save(result *models.SimulationResult) (int64, error)
+	GetByID(id int64) (*models.SimulationResult, error)
+	GetBySimulationRun(simulationRunID int64) ([]*models.SimulationResult, error)
+	GetTopPerformers(simulationRunID int64, limit int) ([]*models.SimulationResult, error)
+	GetByStrategy(strategyID int64, limit int) ([]*models.SimulationResult, error)
+}
+
+// StrategyGenerationRepositoryInterface for managing strategy generations
+type StrategyGenerationRepositoryInterface interface {
+	Save(generation *models.StrategyGeneration) (int64, error)
+	GetByID(id int64) (*models.StrategyGeneration, error)
+	GetByParentStrategy(parentStrategyID int64) ([]*models.StrategyGeneration, error)
+	GetByChildStrategy(childStrategyID int64) ([]*models.StrategyGeneration, error)
+	GetByGenerationNumber(generationNumber int, limit, offset int) ([]*models.StrategyGeneration, error)
+	GetLatestGeneration() (int, error)
+}
+
+// SimulatedTradeRepositoryInterface defines the interface for simulated trade repository operations
+type SimulatedTradeRepositoryInterface interface {
+	Save(trade *models.SimulatedTrade) (int64, error)
+	SaveWithContext(ctx context.Context, trade *models.SimulatedTrade) (int64, error)
+	Update(trade *models.SimulatedTrade) error
+	UpdateWithContext(ctx context.Context, trade *models.SimulatedTrade) error
+	GetByStrategyID(strategyID int64) ([]*models.SimulatedTrade, error)
+	GetByStrategyIDWithContext(ctx context.Context, strategyID int64) ([]*models.SimulatedTrade, error)
+	GetActiveByStrategyID(strategyID int64) ([]*models.SimulatedTrade, error)
+	GetActiveByStrategyIDWithContext(ctx context.Context, strategyID int64) ([]*models.SimulatedTrade, error)
+	GetSummaryByStrategyID(strategyID int64) (map[string]interface{}, error)
+	GetSummaryByStrategyIDWithContext(ctx context.Context, strategyID int64) (map[string]interface{}, error)
+	DeleteByStrategyID(strategyID int64) error
+	DeleteByStrategyIDWithContext(ctx context.Context, strategyID int64) error
+	GetTradesByTokenID(tokenID int64, limit int) ([]*models.SimulatedTrade, error)
+	GetTradesByTokenIDWithContext(ctx context.Context, tokenID int64, limit int) ([]*models.SimulatedTrade, error)
+	GetBySimulationRun(simulationRunID int64) ([]*models.SimulatedTrade, error)
+	GetBySimulationRunWithContext(ctx context.Context, simulationRunID int64) ([]*models.SimulatedTrade, error)
+}
+
+// SimulationEventRepositoryInterface for managing simulation events
+type SimulationEventRepositoryInterface interface {
+	Save(event *models.SimulationEvent) (int64, error)
+	GetByID(id int64) (*models.SimulationEvent, error)
+	GetByStrategyID(strategyID int64, limit, offset int) ([]*models.SimulationEvent, error)
+	GetBySimulationRunID(simulationRunID int64, limit, offset int) ([]*models.SimulationEvent, error)
+	GetLatestByStrategyID(strategyID int64, limit int) ([]*models.SimulationEvent, error)
 }

@@ -28,7 +28,6 @@ func TestStrategyRepositorySave(t *testing.T) {
 		Name:            "Test Strategy",
 		Description:     "A test strategy",
 		Config:          models.JSONB{"key": "value"},
-		UserID:          1,
 		IsPublic:        true,
 		VoteCount:       0,
 		WinCount:        0,
@@ -44,7 +43,6 @@ func TestStrategyRepositorySave(t *testing.T) {
 			strategy.Name,
 			strategy.Description,
 			strategy.Config,
-			strategy.UserID,
 			strategy.IsPublic,
 			strategy.VoteCount,
 			strategy.WinCount,
@@ -89,11 +87,11 @@ func TestStrategyRepositoryGetByID(t *testing.T) {
 
 	// Setup expected query and result
 	rows := sqlmock.NewRows([]string{
-		"id", "name", "description", "config", "user_id", "is_public", "vote_count", "win_count",
+		"id", "name", "description", "config", "is_public", "vote_count", "win_count",
 		"last_win_time", "tags", "complexity_score", "risk_score", "ai_enhanced", "created_at", "updated_at",
 	}).
 		AddRow(
-			strategyID, "Test Strategy", "A test strategy", `{"key":"value"}`, 1, true, 10, 5,
+			strategyID, "Test Strategy", "A test strategy", `{"key":"value"}`, true, 10, 5,
 			lastWinTime, pq.Array([]string{"test", "strategy"}), 5, 3, false, now, now,
 		)
 
@@ -112,66 +110,13 @@ func TestStrategyRepositoryGetByID(t *testing.T) {
 	assert.NotNil(t, strategy)
 	assert.Equal(t, strategyID, strategy.ID)
 	assert.Equal(t, "Test Strategy", strategy.Name)
-	assert.Equal(t, int64(1), strategy.UserID)
 	assert.Equal(t, 10, strategy.VoteCount)
 	assert.Equal(t, 5, strategy.WinCount)
 	assert.Equal(t, 2, len(strategy.Tags))
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestStrategyRepositoryListByUser(t *testing.T) {
-	// Setup mock DB
-	db, mock, err := sqlmock.New()
-	if err != nil {
-		t.Fatalf("Error creating mock: %v", err)
-	}
-	defer func() {
-		if err := mock.ExpectationsWereMet(); err != nil {
-			t.Errorf("Unfulfilled expectations: %v", err)
-		}
-	}()
-
-	// Test data
-	userID := int64(1)
-	includePrivate := true
-	limit := 10
-	offset := 0
-	now := time.Now()
-
-	// Setup expected query and result
-	rows := sqlmock.NewRows([]string{
-		"id", "name", "description", "config", "user_id", "is_public", "vote_count", "win_count",
-		"last_win_time", "tags", "complexity_score", "risk_score", "ai_enhanced", "created_at", "updated_at",
-	}).
-		AddRow(
-			1, "Strategy 1", "Public strategy", `{"key":"value1"}`, userID, true, 5, 2,
-			now, pq.Array([]string{"public"}), 5, 3, false, now, now,
-		).
-		AddRow(
-			2, "Strategy 2", "Private strategy", `{"key":"value2"}`, userID, false, 0, 0,
-			time.Time{}, pq.Array([]string{"private"}), 7, 8, true, now, now,
-		)
-
-	mock.ExpectQuery(`SELECT (.+) FROM strategies WHERE user_id = \$1 ORDER BY updated_at DESC LIMIT \$2 OFFSET \$3`).
-		WithArgs(userID, limit, offset).
-		WillReturnRows(rows)
-
-	// Create repository with mock DB
-	repo := NewStrategyRepository(db)
-
-	// Execute test
-	strategies, err := repo.ListByUser(userID, includePrivate, limit, offset)
-
-	// Assert results
-	assert.NoError(t, err)
-	assert.NotNil(t, strategies)
-	assert.Equal(t, 2, len(strategies))
-	assert.Equal(t, "Strategy 1", strategies[0].Name)
-	assert.Equal(t, "Strategy 2", strategies[1].Name)
-	assert.True(t, strategies[0].IsPublic)
-	assert.False(t, strategies[1].IsPublic)
-	assert.NoError(t, mock.ExpectationsWereMet())
-}
+// Remove TestStrategyRepositoryListByUser since we've removed that method
 
 func TestStrategyRepositoryListPublic(t *testing.T) {
 	// Setup mock DB
@@ -192,15 +137,15 @@ func TestStrategyRepositoryListPublic(t *testing.T) {
 
 	// Setup expected query and result
 	rows := sqlmock.NewRows([]string{
-		"id", "name", "description", "config", "user_id", "is_public", "vote_count", "win_count",
+		"id", "name", "description", "config", "is_public", "vote_count", "win_count",
 		"last_win_time", "tags", "complexity_score", "risk_score", "ai_enhanced", "created_at", "updated_at",
 	}).
 		AddRow(
-			1, "Public Strategy 1", "First public strategy", `{"key":"value1"}`, 1, true, 5, 2,
+			1, "Public Strategy 1", "First public strategy", `{"key":"value1"}`, true, 5, 2,
 			now, pq.Array([]string{"public", "first"}), 5, 3, false, now, now,
 		).
 		AddRow(
-			2, "Public Strategy 2", "Second public strategy", `{"key":"value2"}`, 2, true, 10, 4,
+			2, "Public Strategy 2", "Second public strategy", `{"key":"value2"}`, true, 10, 4,
 			now, pq.Array([]string{"public", "second"}), 7, 8, true, now, now,
 		)
 
@@ -244,7 +189,6 @@ func TestStrategyRepositoryUpdate(t *testing.T) {
 		Name:            "Updated Strategy",
 		Description:     "Updated description",
 		Config:          models.JSONB{"key": "updated"},
-		UserID:          1,
 		IsPublic:        true,
 		VoteCount:       5,
 		WinCount:        2,
@@ -261,7 +205,6 @@ func TestStrategyRepositoryUpdate(t *testing.T) {
 			strategy.Name,
 			strategy.Description,
 			strategy.Config,
-			strategy.UserID,
 			strategy.IsPublic,
 			strategy.VoteCount,
 			strategy.WinCount,
@@ -398,11 +341,11 @@ func TestStrategyRepositorySearchByTags(t *testing.T) {
 
 	// Setup expected query and result
 	rows := sqlmock.NewRows([]string{
-		"id", "name", "description", "config", "user_id", "is_public", "vote_count", "win_count",
+		"id", "name", "description", "config", "is_public", "vote_count", "win_count",
 		"last_win_time", "tags", "complexity_score", "risk_score", "ai_enhanced", "created_at", "updated_at",
 	}).
 		AddRow(
-			1, "AI Trading Strategy", "Uses AI", `{"key":"value1"}`, 1, true, 5, 2,
+			1, "AI Trading Strategy", "Uses AI", `{"key":"value1"}`, true, 5, 2,
 			now, pq.Array([]string{"ai", "trading"}), 5, 3, true, now, now,
 		)
 
@@ -444,15 +387,15 @@ func TestStrategyRepositoryGetTopVoted(t *testing.T) {
 
 	// Setup expected query and result
 	rows := sqlmock.NewRows([]string{
-		"id", "name", "description", "config", "user_id", "is_public", "vote_count", "win_count",
+		"id", "name", "description", "config", "is_public", "vote_count", "win_count",
 		"last_win_time", "tags", "complexity_score", "risk_score", "ai_enhanced", "created_at", "updated_at",
 	}).
 		AddRow(
-			1, "Popular Strategy", "Most votes", `{"key":"value1"}`, 1, true, 50, 5,
+			1, "Popular Strategy", "Most votes", `{"key":"value1"}`, true, 50, 5,
 			now, pq.Array([]string{"popular"}), 5, 3, false, now, now,
 		).
 		AddRow(
-			2, "Second Popular", "Second most votes", `{"key":"value2"}`, 2, true, 30, 3,
+			2, "Second Popular", "Second most votes", `{"key":"value2"}`, true, 30, 3,
 			now, pq.Array([]string{"popular"}), 4, 5, false, now, now,
 		)
 
@@ -495,15 +438,15 @@ func TestStrategyRepositoryGetTopWinners(t *testing.T) {
 
 	// Setup expected query and result
 	rows := sqlmock.NewRows([]string{
-		"id", "name", "description", "config", "user_id", "is_public", "vote_count", "win_count",
+		"id", "name", "description", "config", "is_public", "vote_count", "win_count",
 		"last_win_time", "tags", "complexity_score", "risk_score", "ai_enhanced", "created_at", "updated_at",
 	}).
 		AddRow(
-			1, "Winning Strategy", "Most wins", `{"key":"value1"}`, 1, true, 20, 15,
+			1, "Winning Strategy", "Most wins", `{"key":"value1"}`, true, 20, 15,
 			now, pq.Array([]string{"winning"}), 5, 3, false, now, now,
 		).
 		AddRow(
-			2, "Second Winner", "Second most wins", `{"key":"value2"}`, 2, true, 15, 10,
+			2, "Second Winner", "Second most wins", `{"key":"value2"}`, true, 15, 10,
 			now, pq.Array([]string{"winning"}), 4, 5, false, now, now,
 		)
 

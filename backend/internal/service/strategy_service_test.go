@@ -74,126 +74,69 @@ func (m *MockStrategyRepository) GetTopWinners(limit int) ([]*models.Strategy, e
 	return args.Get(0).([]*models.Strategy), args.Error(1)
 }
 
-type MockUserRepository struct {
+type MockStrategyMetricRepository struct {
 	mock.Mock
 }
 
-func (m *MockUserRepository) Save(user *models.User) (int64, error) {
-	args := m.Called(user)
+func (m *MockStrategyMetricRepository) Save(metric *models.StrategyMetric) (int64, error) {
+	args := m.Called(metric)
 	return args.Get(0).(int64), args.Error(1)
 }
 
-func (m *MockUserRepository) GetByID(id int64) (*models.User, error) {
+func (m *MockStrategyMetricRepository) GetByID(id int64) (*models.StrategyMetric, error) {
 	args := m.Called(id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*models.User), args.Error(1)
+	return args.Get(0).(*models.StrategyMetric), args.Error(1)
 }
 
-func (m *MockUserRepository) GetByUsername(username string) (*models.User, error) {
-	args := m.Called(username)
+func (m *MockStrategyMetricRepository) GetByStrategy(strategyID int64) ([]*models.StrategyMetric, error) {
+	args := m.Called(strategyID)
+	return args.Get(0).([]*models.StrategyMetric), args.Error(1)
+}
+
+func (m *MockStrategyMetricRepository) GetByDuel(duelID int64) ([]*models.StrategyMetric, error) {
+	args := m.Called(duelID)
+	return args.Get(0).([]*models.StrategyMetric), args.Error(1)
+}
+
+func (m *MockStrategyMetricRepository) GetBySimulationRun(simulationRunID int64) ([]*models.StrategyMetric, error) {
+	args := m.Called(simulationRunID)
+	return args.Get(0).([]*models.StrategyMetric), args.Error(1)
+}
+
+func (m *MockStrategyMetricRepository) GetLatestByStrategy(strategyID int64) (*models.StrategyMetric, error) {
+	args := m.Called(strategyID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*models.User), args.Error(1)
-}
-
-func (m *MockUserRepository) GetByWalletAddress(walletAddress string) (*models.User, error) {
-	args := m.Called(walletAddress)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*models.User), args.Error(1)
-}
-
-func (m *MockUserRepository) Update(user *models.User) error {
-	args := m.Called(user)
-	return args.Error(0)
-}
-
-func (m *MockUserRepository) List(limit, offset int) ([]*models.User, error) {
-	args := m.Called(limit, offset)
-	return args.Get(0).([]*models.User), args.Error(1)
-}
-
-func (m *MockUserRepository) Delete(id int64) error {
-	args := m.Called(id)
-	return args.Error(0)
-}
-
-type MockUserScoreRepository struct {
-	mock.Mock
-}
-
-func (m *MockUserScoreRepository) GetByUserID(userID int64) (*models.UserScore, error) {
-	args := m.Called(userID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*models.UserScore), args.Error(1)
-}
-
-func (m *MockUserScoreRepository) GetTopUsers(limit int) ([]*models.UserScore, error) {
-	args := m.Called(limit)
-	return args.Get(0).([]*models.UserScore), args.Error(1)
-}
-
-func (m *MockUserScoreRepository) IncrementPoints(userID int64, points int) error {
-	args := m.Called(userID, points)
-	return args.Error(0)
-}
-
-func (m *MockUserScoreRepository) IncrementWins(userID int64) error {
-	args := m.Called(userID)
-	return args.Error(0)
-}
-
-func (m *MockUserScoreRepository) IncrementStrategies(userID int64) error {
-	args := m.Called(userID)
-	return args.Error(0)
-}
-
-func (m *MockUserScoreRepository) IncrementVotes(userID int64) error {
-	args := m.Called(userID)
-	return args.Error(0)
-}
-
-func (m *MockUserScoreRepository) UpdateLastUpdated(userID int64) error {
-	args := m.Called(userID)
-	return args.Error(0)
+	return args.Get(0).(*models.StrategyMetric), args.Error(1)
 }
 
 // Test CreateStrategy
 func TestCreateStrategy(t *testing.T) {
 	// Setup mocks
 	mockStrategyRepo := new(MockStrategyRepository)
-	mockUserRepo := new(MockUserRepository)
-	mockUserScoreRepo := new(MockUserScoreRepository)
+	mockStrategyMetricRepo := new(MockStrategyMetricRepository)
 
 	// Create service
 	service := NewStrategyService(
 		mockStrategyRepo,
-		mockUserRepo,
-		mockUserScoreRepo,
+		mockStrategyMetricRepo,
 		logger.New("test"),
 	)
 
 	// Test data
-	userID := int64(1)
-	user := &models.User{ID: userID, Username: "testuser"}
 	strategy := &models.Strategy{
 		Name:     "Test Strategy",
-		UserID:   userID,
 		Config:   models.JSONB{"rules": []interface{}{map[string]interface{}{"condition": "price > 100", "action": "buy"}}},
 		IsPublic: true,
 	}
 	expectedID := int64(123)
 
 	// Setup expectations
-	mockUserRepo.On("GetByID", userID).Return(user, nil)
 	mockStrategyRepo.On("Save", mock.AnythingOfType("*models.Strategy")).Return(expectedID, nil)
-	mockUserScoreRepo.On("IncrementStrategies", userID).Return(nil)
 
 	// Call method
 	id, err := service.CreateStrategy(strategy)
@@ -201,9 +144,8 @@ func TestCreateStrategy(t *testing.T) {
 	// Assertions
 	assert.NoError(t, err)
 	assert.Equal(t, expectedID, id)
-	mockUserRepo.AssertExpectations(t)
 	mockStrategyRepo.AssertExpectations(t)
-	mockUserScoreRepo.AssertExpectations(t)
+	mockStrategyMetricRepo.AssertExpectations(t)
 
 	// Verify strategy properties were set correctly
 	mockStrategyRepo.AssertCalled(t, "Save", mock.MatchedBy(func(s *models.Strategy) bool {
@@ -215,14 +157,12 @@ func TestCreateStrategy(t *testing.T) {
 func TestCreateStrategyInvalidStrategy(t *testing.T) {
 	// Setup mocks
 	mockStrategyRepo := new(MockStrategyRepository)
-	mockUserRepo := new(MockUserRepository)
-	mockUserScoreRepo := new(MockUserScoreRepository)
+	mockStrategyMetricRepo := new(MockStrategyMetricRepository)
 
 	// Create service
 	service := NewStrategyService(
 		mockStrategyRepo,
-		mockUserRepo,
-		mockUserScoreRepo,
+		mockStrategyMetricRepo,
 		logger.New("test"),
 	)
 
@@ -234,22 +174,17 @@ func TestCreateStrategyInvalidStrategy(t *testing.T) {
 	}{
 		{
 			name:        "Empty name",
-			strategy:    &models.Strategy{UserID: 1, Config: models.JSONB{"rules": []interface{}{}}},
+			strategy:    &models.Strategy{Config: models.JSONB{"rules": []interface{}{}}},
 			expectedErr: "strategy name is required",
 		},
 		{
-			name:        "No user ID",
-			strategy:    &models.Strategy{Name: "Test", Config: models.JSONB{"rules": []interface{}{}}},
-			expectedErr: "user ID is required",
-		},
-		{
 			name:        "Empty config",
-			strategy:    &models.Strategy{Name: "Test", UserID: 1, Config: models.JSONB{}},
-			expectedErr: "strategy configuration is required",
+			strategy:    &models.Strategy{Name: "Test", Config: models.JSONB{}},
+			expectedErr: "strategy must contain rules",
 		},
 		{
 			name:        "Nil config",
-			strategy:    &models.Strategy{Name: "Test", UserID: 1},
+			strategy:    &models.Strategy{Name: "Test"},
 			expectedErr: "strategy configuration is required",
 		},
 	}
@@ -266,55 +201,16 @@ func TestCreateStrategyInvalidStrategy(t *testing.T) {
 	}
 }
 
-// Test CreateStrategy with user not found
-func TestCreateStrategyUserNotFound(t *testing.T) {
-	// Setup mocks
-	mockStrategyRepo := new(MockStrategyRepository)
-	mockUserRepo := new(MockUserRepository)
-	mockUserScoreRepo := new(MockUserScoreRepository)
-
-	// Create service
-	service := NewStrategyService(
-		mockStrategyRepo,
-		mockUserRepo,
-		mockUserScoreRepo,
-		logger.New("test"),
-	)
-
-	// Test data
-	userID := int64(999) // Non-existent user
-	strategy := &models.Strategy{
-		Name:     "Test Strategy",
-		UserID:   userID,
-		Config:   models.JSONB{"rules": []interface{}{map[string]interface{}{"condition": "price > 100", "action": "buy"}}},
-		IsPublic: true,
-	}
-
-	// Setup expectations
-	mockUserRepo.On("GetByID", userID).Return(nil, nil) // User not found
-
-	// Call method
-	_, err := service.CreateStrategy(strategy)
-
-	// Assertions
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "user not found")
-	mockUserRepo.AssertExpectations(t)
-	mockStrategyRepo.AssertNotCalled(t, "Save")
-}
-
 // Test GetStrategyByID
 func TestGetStrategyByID(t *testing.T) {
 	// Setup mocks
 	mockStrategyRepo := new(MockStrategyRepository)
-	mockUserRepo := new(MockUserRepository)
-	mockUserScoreRepo := new(MockUserScoreRepository)
+	mockStrategyMetricRepo := new(MockStrategyMetricRepository)
 
 	// Create service
 	service := NewStrategyService(
 		mockStrategyRepo,
-		mockUserRepo,
-		mockUserScoreRepo,
+		mockStrategyMetricRepo,
 		logger.New("test"),
 	)
 
@@ -323,7 +219,6 @@ func TestGetStrategyByID(t *testing.T) {
 	expectedStrategy := &models.Strategy{
 		ID:       strategyID,
 		Name:     "Test Strategy",
-		UserID:   1,
 		Config:   models.JSONB{"rules": []interface{}{}},
 		IsPublic: true,
 	}
@@ -344,14 +239,12 @@ func TestGetStrategyByID(t *testing.T) {
 func TestGetStrategyByIDNotFound(t *testing.T) {
 	// Setup mocks
 	mockStrategyRepo := new(MockStrategyRepository)
-	mockUserRepo := new(MockUserRepository)
-	mockUserScoreRepo := new(MockUserScoreRepository)
+	mockStrategyMetricRepo := new(MockStrategyMetricRepository)
 
 	// Create service
 	service := NewStrategyService(
 		mockStrategyRepo,
-		mockUserRepo,
-		mockUserScoreRepo,
+		mockStrategyMetricRepo,
 		logger.New("test"),
 	)
 
@@ -374,24 +267,20 @@ func TestGetStrategyByIDNotFound(t *testing.T) {
 func TestUpdateStrategy(t *testing.T) {
 	// Setup mocks
 	mockStrategyRepo := new(MockStrategyRepository)
-	mockUserRepo := new(MockUserRepository)
-	mockUserScoreRepo := new(MockUserScoreRepository)
+	mockStrategyMetricRepo := new(MockStrategyMetricRepository)
 
 	// Create service
 	service := NewStrategyService(
 		mockStrategyRepo,
-		mockUserRepo,
-		mockUserScoreRepo,
+		mockStrategyMetricRepo,
 		logger.New("test"),
 	)
 
 	// Test data
-	userID := int64(1)
 	strategyID := int64(1)
 	existingStrategy := &models.Strategy{
 		ID:          strategyID,
 		Name:        "Original Strategy",
-		UserID:      userID,
 		Config:      models.JSONB{"rules": []interface{}{}},
 		IsPublic:    true,
 		VoteCount:   5,
@@ -403,7 +292,6 @@ func TestUpdateStrategy(t *testing.T) {
 	updatedStrategy := &models.Strategy{
 		ID:       strategyID,
 		Name:     "Updated Strategy",
-		UserID:   userID,
 		Config:   models.JSONB{"rules": []interface{}{map[string]interface{}{"condition": "new condition", "action": "sell"}}},
 		IsPublic: false,
 	}
@@ -434,14 +322,12 @@ func TestUpdateStrategy(t *testing.T) {
 func TestUpdateStrategyNotFound(t *testing.T) {
 	// Setup mocks
 	mockStrategyRepo := new(MockStrategyRepository)
-	mockUserRepo := new(MockUserRepository)
-	mockUserScoreRepo := new(MockUserScoreRepository)
+	mockStrategyMetricRepo := new(MockStrategyMetricRepository)
 
 	// Create service
 	service := NewStrategyService(
 		mockStrategyRepo,
-		mockUserRepo,
-		mockUserScoreRepo,
+		mockStrategyMetricRepo,
 		logger.New("test"),
 	)
 
@@ -450,7 +336,6 @@ func TestUpdateStrategyNotFound(t *testing.T) {
 	strategy := &models.Strategy{
 		ID:       strategyID,
 		Name:     "Test Strategy",
-		UserID:   1,
 		Config:   models.JSONB{"rules": []interface{}{}},
 		IsPublic: true,
 	}
@@ -468,78 +353,25 @@ func TestUpdateStrategyNotFound(t *testing.T) {
 	mockStrategyRepo.AssertNotCalled(t, "Update")
 }
 
-// Test UpdateStrategy with wrong user
-func TestUpdateStrategyWrongUser(t *testing.T) {
-	// Setup mocks
-	mockStrategyRepo := new(MockStrategyRepository)
-	mockUserRepo := new(MockUserRepository)
-	mockUserScoreRepo := new(MockUserScoreRepository)
-
-	// Create service
-	service := NewStrategyService(
-		mockStrategyRepo,
-		mockUserRepo,
-		mockUserScoreRepo,
-		logger.New("test"),
-	)
-
-	// Test data
-	strategyID := int64(1)
-	ownerUserID := int64(1)
-	differentUserID := int64(2)
-
-	existingStrategy := &models.Strategy{
-		ID:       strategyID,
-		Name:     "Original Strategy",
-		UserID:   ownerUserID, // Original owner
-		Config:   models.JSONB{"rules": []interface{}{}},
-		IsPublic: true,
-	}
-
-	updatedStrategy := &models.Strategy{
-		ID:       strategyID,
-		Name:     "Updated Strategy",
-		UserID:   differentUserID, // Different user
-		Config:   models.JSONB{"rules": []interface{}{}},
-		IsPublic: false,
-	}
-
-	// Setup expectations
-	mockStrategyRepo.On("GetByID", strategyID).Return(existingStrategy, nil)
-
-	// Call method
-	err := service.UpdateStrategy(updatedStrategy)
-
-	// Assertions
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "user does not own this strategy")
-	mockStrategyRepo.AssertExpectations(t)
-	mockStrategyRepo.AssertNotCalled(t, "Update")
-}
-
 // Test DeleteStrategy
 func TestDeleteStrategy(t *testing.T) {
 	// Setup mocks
 	mockStrategyRepo := new(MockStrategyRepository)
-	mockUserRepo := new(MockUserRepository)
-	mockUserScoreRepo := new(MockUserScoreRepository)
+	mockStrategyMetricRepo := new(MockStrategyMetricRepository)
 
 	// Create service
 	service := NewStrategyService(
 		mockStrategyRepo,
-		mockUserRepo,
-		mockUserScoreRepo,
+		mockStrategyMetricRepo,
 		logger.New("test"),
 	)
 
 	// Test data
 	strategyID := int64(1)
-	userID := int64(1)
 
 	strategy := &models.Strategy{
 		ID:       strategyID,
 		Name:     "Test Strategy",
-		UserID:   userID,
 		Config:   models.JSONB{"rules": []interface{}{}},
 		IsPublic: true,
 	}
@@ -549,7 +381,7 @@ func TestDeleteStrategy(t *testing.T) {
 	mockStrategyRepo.On("Delete", strategyID).Return(nil)
 
 	// Call method
-	err := service.DeleteStrategy(strategyID, userID)
+	err := service.DeleteStrategy(strategyID)
 
 	// Assertions
 	assert.NoError(t, err)
@@ -560,26 +392,23 @@ func TestDeleteStrategy(t *testing.T) {
 func TestDeleteStrategyNotFound(t *testing.T) {
 	// Setup mocks
 	mockStrategyRepo := new(MockStrategyRepository)
-	mockUserRepo := new(MockUserRepository)
-	mockUserScoreRepo := new(MockUserScoreRepository)
+	mockStrategyMetricRepo := new(MockStrategyMetricRepository)
 
 	// Create service
 	service := NewStrategyService(
 		mockStrategyRepo,
-		mockUserRepo,
-		mockUserScoreRepo,
+		mockStrategyMetricRepo,
 		logger.New("test"),
 	)
 
 	// Test data
 	strategyID := int64(999) // Non-existent strategy
-	userID := int64(1)
 
 	// Setup expectations
 	mockStrategyRepo.On("GetByID", strategyID).Return(nil, nil) // Strategy not found
 
 	// Call method
-	err := service.DeleteStrategy(strategyID, userID)
+	err := service.DeleteStrategy(strategyID)
 
 	// Assertions
 	assert.Error(t, err)
@@ -588,97 +417,16 @@ func TestDeleteStrategyNotFound(t *testing.T) {
 	mockStrategyRepo.AssertNotCalled(t, "Delete")
 }
 
-// Test DeleteStrategy with wrong user
-func TestDeleteStrategyWrongUser(t *testing.T) {
-	// Setup mocks
-	mockStrategyRepo := new(MockStrategyRepository)
-	mockUserRepo := new(MockUserRepository)
-	mockUserScoreRepo := new(MockUserScoreRepository)
-
-	// Create service
-	service := NewStrategyService(
-		mockStrategyRepo,
-		mockUserRepo,
-		mockUserScoreRepo,
-		logger.New("test"),
-	)
-
-	// Test data
-	strategyID := int64(1)
-	ownerUserID := int64(1)
-	differentUserID := int64(2)
-
-	strategy := &models.Strategy{
-		ID:       strategyID,
-		Name:     "Test Strategy",
-		UserID:   ownerUserID, // Original owner
-		Config:   models.JSONB{"rules": []interface{}{}},
-		IsPublic: true,
-	}
-
-	// Setup expectations
-	mockStrategyRepo.On("GetByID", strategyID).Return(strategy, nil)
-
-	// Call method
-	err := service.DeleteStrategy(strategyID, differentUserID)
-
-	// Assertions
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "user does not own this strategy")
-	mockStrategyRepo.AssertExpectations(t)
-	mockStrategyRepo.AssertNotCalled(t, "Delete")
-}
-
-// Test GetUserStrategies
-func TestGetUserStrategies(t *testing.T) {
-	// Setup mocks
-	mockStrategyRepo := new(MockStrategyRepository)
-	mockUserRepo := new(MockUserRepository)
-	mockUserScoreRepo := new(MockUserScoreRepository)
-
-	// Create service
-	service := NewStrategyService(
-		mockStrategyRepo,
-		mockUserRepo,
-		mockUserScoreRepo,
-		logger.New("test"),
-	)
-
-	// Test data
-	userID := int64(1)
-	includePrivate := true
-	limit := 10
-	offset := 0
-
-	expectedStrategies := []*models.Strategy{
-		{ID: 1, Name: "Strategy 1", UserID: userID},
-		{ID: 2, Name: "Strategy 2", UserID: userID},
-	}
-
-	// Setup expectations
-	mockStrategyRepo.On("ListByUser", userID, includePrivate, limit, offset).Return(expectedStrategies, nil)
-
-	// Call method
-	strategies, err := service.GetUserStrategies(userID, includePrivate, limit, offset)
-
-	// Assertions
-	assert.NoError(t, err)
-	assert.Equal(t, expectedStrategies, strategies)
-	mockStrategyRepo.AssertExpectations(t)
-}
-
 // Test GetPublicStrategies
 func TestGetPublicStrategies(t *testing.T) {
 	// Setup mocks
 	mockStrategyRepo := new(MockStrategyRepository)
-	mockUserRepo := new(MockUserRepository)
-	mockUserScoreRepo := new(MockUserScoreRepository)
+	mockStrategyMetricRepo := new(MockStrategyMetricRepository)
 
 	// Create service
 	service := NewStrategyService(
 		mockStrategyRepo,
-		mockUserRepo,
-		mockUserScoreRepo,
+		mockStrategyMetricRepo,
 		logger.New("test"),
 	)
 
@@ -687,8 +435,8 @@ func TestGetPublicStrategies(t *testing.T) {
 	offset := 0
 
 	expectedStrategies := []*models.Strategy{
-		{ID: 1, Name: "Public Strategy 1", UserID: 1, IsPublic: true},
-		{ID: 2, Name: "Public Strategy 2", UserID: 2, IsPublic: true},
+		{ID: 1, Name: "Public Strategy 1", IsPublic: true},
+		{ID: 2, Name: "Public Strategy 2", IsPublic: true},
 	}
 
 	// Setup expectations
@@ -707,14 +455,12 @@ func TestGetPublicStrategies(t *testing.T) {
 func TestGetTopStrategies(t *testing.T) {
 	// Setup mocks
 	mockStrategyRepo := new(MockStrategyRepository)
-	mockUserRepo := new(MockUserRepository)
-	mockUserScoreRepo := new(MockUserScoreRepository)
+	mockStrategyMetricRepo := new(MockStrategyMetricRepository)
 
 	// Create service
 	service := NewStrategyService(
 		mockStrategyRepo,
-		mockUserRepo,
-		mockUserScoreRepo,
+		mockStrategyMetricRepo,
 		logger.New("test"),
 	)
 
@@ -746,6 +492,22 @@ func TestGetTopStrategies(t *testing.T) {
 			},
 		},
 		{
+			name:     "Top performing strategies",
+			criteria: "performance",
+			mock: func() {
+				// For this test, we'll just set up the expected calls for getTopPerformingStrategies
+				metrics := []*models.StrategyMetric{
+					{StrategyID: 1, WinRate: 0.8},
+					{StrategyID: 2, WinRate: 0.7},
+				}
+				mockStrategyRepo.On("ListPublic", 1000, 0).Return(expectedStrategies, nil).Once()
+				mockStrategyMetricRepo.On("GetLatestByStrategy", int64(1)).Return(metrics[0], nil).Once()
+				mockStrategyMetricRepo.On("GetLatestByStrategy", int64(2)).Return(metrics[1], nil).Once()
+				mockStrategyRepo.On("GetByID", int64(1)).Return(expectedStrategies[0], nil).Once()
+				mockStrategyRepo.On("GetByID", int64(2)).Return(expectedStrategies[1], nil).Once()
+			},
+		},
+		{
 			name:     "Invalid criteria",
 			criteria: "invalid",
 			mock:     func() {},
@@ -767,27 +529,30 @@ func TestGetTopStrategies(t *testing.T) {
 				assert.Nil(t, strategies)
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, expectedStrategies, strategies)
+				if tc.criteria != "performance" { // Skip direct comparison for performance as mocking is more complex
+					assert.Equal(t, expectedStrategies, strategies)
+				} else {
+					assert.NotNil(t, strategies)
+				}
 			}
 		})
 	}
 
 	// Verify all mocks
 	mockStrategyRepo.AssertExpectations(t)
+	mockStrategyMetricRepo.AssertExpectations(t)
 }
 
 // Test SearchStrategiesByTags
 func TestSearchStrategiesByTags(t *testing.T) {
 	// Setup mocks
 	mockStrategyRepo := new(MockStrategyRepository)
-	mockUserRepo := new(MockUserRepository)
-	mockUserScoreRepo := new(MockUserScoreRepository)
+	mockStrategyMetricRepo := new(MockStrategyMetricRepository)
 
 	// Create service
 	service := NewStrategyService(
 		mockStrategyRepo,
-		mockUserRepo,
-		mockUserScoreRepo,
+		mockStrategyMetricRepo,
 		logger.New("test"),
 	)
 
@@ -810,4 +575,43 @@ func TestSearchStrategiesByTags(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, expectedStrategies, strategies)
 	mockStrategyRepo.AssertExpectations(t)
+}
+
+// Test RecordWin
+func TestRecordWin(t *testing.T) {
+	// Setup mocks
+	mockStrategyRepo := new(MockStrategyRepository)
+	mockStrategyMetricRepo := new(MockStrategyMetricRepository)
+
+	// Create service
+	service := NewStrategyService(
+		mockStrategyRepo,
+		mockStrategyMetricRepo,
+		logger.New("test"),
+	)
+
+	// Test data
+	strategyID := int64(1)
+	simulationID := int64(5)
+	winTime := time.Now()
+
+	// Setup expectations
+	mockStrategyRepo.On("IncrementWinCount", strategyID, winTime).Return(nil)
+	mockStrategyMetricRepo.On("Save", mock.AnythingOfType("*models.StrategyMetric")).Return(int64(1), nil)
+
+	// Call method
+	err := service.RecordWin(strategyID, simulationID, winTime)
+
+	// Assertions
+	assert.NoError(t, err)
+	mockStrategyRepo.AssertExpectations(t)
+	mockStrategyMetricRepo.AssertExpectations(t)
+
+	// Verify metric properties
+	mockStrategyMetricRepo.AssertCalled(t, "Save", mock.MatchedBy(func(m *models.StrategyMetric) bool {
+		return m.StrategyID == strategyID &&
+			m.SimulationRunID != nil &&
+			*m.SimulationRunID == simulationID &&
+			m.WinRate == 1.0
+	}))
 }
