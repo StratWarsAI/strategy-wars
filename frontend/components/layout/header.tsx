@@ -2,6 +2,7 @@
 
 import { cn } from '@/lib/utils';
 import { MobileSidebar } from './mobile-sidebar';
+import { TopNavbar } from './top-bar';
 
 export default function Header() {
   
@@ -12,6 +13,9 @@ export default function Header() {
           <MobileSidebar />
         </div>
         
+        <div className="flex-1 flex justify-end">
+          <TopNavbar />
+        </div>
       </div>
     </header>
   );
