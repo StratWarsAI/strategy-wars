@@ -13,5 +13,4 @@ export const navigationItems: NavItem[] = [
     icon: 'brain',
     label: 'Strategy AI'
   }
-  
 ];

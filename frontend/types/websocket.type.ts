@@ -7,37 +7,52 @@ export interface WebSocketMessage {
     type: 'performance_update';
     timestamp: number;
     strategy_id: number;
-    win_rate: number;
+    winRate: number;
     roi: number;
-    net_pnl: number;
-    total_trades: number;
+    netPnl: number;
+    totalTrades: number;
   }
   
   export interface TradeExecutedEvent extends WebSocketMessage {
     type: 'trade_executed';
-    token_id: number;
-    token_symbol: string;
-    token_name: string;
-    token_mint: string;
-    image_url?: string;
+    strategy_id: number;
+    tokenId: number;
+    tokenSymbol: string;
+    tokenName: string;
+    tokenMint: string;
+    imageUrl?: string;
+    twitterUrl?: string;
+    websiteUrl?: string;
     action: 'buy' | 'sell';
     price: number;
     amount: number;
     timestamp: number;
-    current_balance: number;
+    currentBalance: number;
+    entryMarketCap?: number;
+    usdMarketCap?: number;
+    signalData?: Record<string, any>;
   }
   
   export interface TradeClosedEvent extends WebSocketMessage {
     type: 'trade_closed';
-    token_id: number;
-    token_symbol: string;
-    token_name: string;
-    entry_price: number;
-    exit_price: number;
-    exit_reason: string;
-    profit_loss: number;
-    profit_loss_pct: number;
+    strategy_id: number;
+    tokenId: number;
+    tokenSymbol: string;
+    tokenName: string;
+    tokenMint: string;
+    imageUrl?: string;
+    twitterUrl?: string;
+    websiteUrl?: string;
+    action: string;
+    entryPrice: number;
+    exitPrice: number;
+    exitReason: string;
+    profitLoss: number;
+    profitLossPct: number;
     timestamp: number;
+    entryMarketCap?: number;
+    exitMarketCap?: number;
+    usdMarketCap?: number;
   }
   
   export interface SimulationStatusEvent extends WebSocketMessage {
@@ -45,6 +60,14 @@ export interface WebSocketMessage {
     strategy_id: number;
     status: 'starting' | 'running' | 'completed' | 'failed';
     timestamp: number;
+    totalTrades: number;
+    activeTrades: number;
+    profitableTrades: number;
+    losingTrades: number;
+    winRate: number;
+    roi: number;
+    currentBalance: number;
+    initialBalance: number;
   }
   
   export interface SimulationStartedEvent extends WebSocketMessage {
@@ -56,7 +79,15 @@ export interface WebSocketMessage {
   export interface SimulationCompletedEvent extends WebSocketMessage {
     type: 'simulation_completed';
     strategy_id: number;
-    total_iterations: number;
-    execution_time_sec: number;
+    totalIterations: number;
+    executionTimeSec: number;
     timestamp: number;
+  }
+
+export interface SimulationBalanceDepletedEvent extends WebSocketMessage {
+    type: 'simulation_balance_depleted';
+    strategy_id: number;
+    timestamp: number;
+    remainingBalance: number;
+    positionSize: number;
   }

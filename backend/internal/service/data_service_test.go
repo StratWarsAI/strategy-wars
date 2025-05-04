@@ -2,6 +2,7 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -67,6 +68,12 @@ func (m *MockTradeRepository) Save(trade *models.Trade) (int64, error) {
 
 func (m *MockTradeRepository) GetTradesByTokenID(tokenID int64, limit int) ([]*models.Trade, error) {
 	args := m.Called(tokenID, limit)
+	return args.Get(0).([]*models.Trade), args.Error(1)
+}
+
+// GetTradesByTokenIDWithContext implements repository.TradeRepositoryInterface.
+func (m *MockTradeRepository) GetTradesByTokenIDWithContext(ctx context.Context, tokenID int64, limit int) ([]*models.Trade, error) {
+	args := m.Called(ctx, tokenID, limit)
 	return args.Get(0).([]*models.Trade), args.Error(1)
 }
 

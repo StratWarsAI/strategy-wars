@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/StratWarsAI/strategy-wars/internal/api/dto"
 	"github.com/StratWarsAI/strategy-wars/internal/models"
 	"github.com/StratWarsAI/strategy-wars/internal/pkg/logger"
 	"github.com/StratWarsAI/strategy-wars/internal/repository"
@@ -41,7 +42,7 @@ type SimulationService struct {
 type SimulationContext struct {
 	StrategyID      int64
 	Strategy        *models.Strategy
-	Config          StrategyConfig
+	Config          models.StrategyConfig
 	StartTime       time.Time
 	Trades          []*models.SimulatedTrade
 	IsRunning       bool
@@ -61,18 +62,6 @@ func (s *SimulationContext) IsActive() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.IsRunning
-}
-
-// StrategyConfig defines the configuration for a trading strategy
-type StrategyConfig struct {
-	MarketCapThreshold   float64 `json:"marketCapThreshold"`
-	MinBuysForEntry      int     `json:"minBuysForEntry"`
-	EntryTimeWindowSec   int     `json:"entryTimeWindowSec"`
-	TakeProfitPct        float64 `json:"takeProfitPct"`
-	StopLossPct          float64 `json:"stopLossPct"`
-	MaxHoldTimeSec       int     `json:"maxHoldTimeSec"`
-	FixedPositionSizeSol float64 `json:"fixedPositionSizeSol"`
-	InitialBalance       float64 `json:"initialBalance"`
 }
 
 // NewSimulationService creates a new simulation service
@@ -113,6 +102,11 @@ func NewSimulationService(
 		shutdownCh:          make(chan struct{}),
 	}
 
+	// Reset any simulations that were left in "running" state
+	if err := service.ResetStuckSimulations(); err != nil {
+		logger.Error("Failed to reset stuck simulations: %v", err)
+	}
+
 	// Start background monitoring of simulations
 	go service.monitorSimulations()
 
@@ -130,6 +124,11 @@ func (s *SimulationService) Shutdown() {
 		if sim.cancel != nil {
 			sim.cancel()
 		}
+
+		// Update status in database
+		if err := s.simulationRunRepo.UpdateStatus(sim.SimulationRunID, "stopped"); err != nil {
+			s.logger.Error("Error updating simulation run status during shutdown: %v", err)
+		}
 	}
 	s.activeSimsMu.Unlock()
 
@@ -138,6 +137,26 @@ func (s *SimulationService) Shutdown() {
 
 	// Wait for monitor goroutine to exit
 	s.logger.Info("Shutdown complete")
+}
+
+func (s *SimulationService) ResetStuckSimulations() error {
+	s.logger.Info("Checking for stuck simulations...")
+
+	// Get all simulations that are still marked as "running"
+	runningSimulations, err := s.simulationRunRepo.GetByStatus("running", 10)
+	if err != nil {
+		return fmt.Errorf("error fetching running simulations: %v", err)
+	}
+
+	for _, run := range runningSimulations {
+		s.logger.Info("Resetting stuck simulation: %d", run.ID)
+		if err := s.simulationRunRepo.UpdateStatus(run.ID, "stopped"); err != nil {
+			s.logger.Error("Error updating stuck simulation status: %v", err)
+		}
+	}
+
+	s.logger.Info("Reset %d stuck simulations", len(runningSimulations))
+	return nil
 }
 
 // monitorSimulations cleans up completed simulations
@@ -166,22 +185,13 @@ func (s *SimulationService) cleanupSimulation(strategyID int64) {
 
 	sim, exists := s.activeSims[strategyID]
 	if exists {
-		// Mark as not running before removing
-		sim.mu.Lock()
-		sim.IsRunning = false
-		sim.mu.Unlock()
-
 		// Wait for all goroutines to finish before removing
 		if sim.cancel != nil {
 			sim.cancel() // Cancel all goroutines
 		}
 		sim.wg.Wait() // Wait for all goroutines to finish
-
-		// Remove from active simulations map
 		delete(s.activeSims, strategyID)
 		s.logger.Info("Simulation for strategy %d cleaned up", strategyID)
-	} else {
-		s.logger.Warn("Attempted to cleanup simulation for strategy %d but it wasn't in active simulations map", strategyID)
 	}
 }
 
@@ -236,7 +246,7 @@ func (s *SimulationService) StartSimulation(strategyID int64) error {
 	}
 
 	// Parse the strategy configuration
-	var config StrategyConfig
+	var config models.StrategyConfig
 	configData, err := json.Marshal(strategy.Config)
 	if err != nil {
 		return fmt.Errorf("error marshaling strategy config: %v", err)
@@ -300,7 +310,7 @@ func (s *SimulationService) StartSimulation(strategyID int64) error {
 }
 
 // validateStrategyConfig validates the strategy configuration
-func validateStrategyConfig(config *StrategyConfig) error {
+func validateStrategyConfig(config *models.StrategyConfig) error {
 	if config.InitialBalance <= 0 {
 		return fmt.Errorf("initial balance must be positive")
 	}
@@ -318,15 +328,37 @@ func (s *SimulationService) StopSimulation(strategyID int64) error {
 	s.activeSimsMu.RLock()
 	sim, exists := s.activeSims[strategyID]
 	isRunning := false
+	var simulationRunID int64
 	if exists {
 		sim.mu.RLock()
 		isRunning = sim.IsRunning
+		simulationRunID = sim.SimulationRunID
 		sim.mu.RUnlock()
 	}
 	s.activeSimsMu.RUnlock()
 
 	if !exists || !isRunning {
 		s.cleanupSimulation(strategyID)
+
+		// Even if not found in memory, try to update any database records that might be stuck
+		runningSimulations, err := s.simulationRunRepo.GetByStatus("running", 10)
+		if err == nil {
+			for _, run := range runningSimulations {
+				// Check if this simulation belongs to the current strategy
+				params := run.SimulationParameters
+				if strategyIDParam, ok := params["strategyID"]; ok {
+					if int64(strategyIDParam.(float64)) == strategyID {
+						// Found a database record for this strategy, update it
+						if err := s.simulationRunRepo.UpdateStatus(run.ID, "completed"); err != nil {
+							s.logger.Error("Error updating stuck simulation status for run %d: %v", run.ID, err)
+						} else {
+							s.logger.Info("Updated status of simulation run %d to completed", run.ID)
+						}
+					}
+				}
+			}
+		}
+
 		return fmt.Errorf("no active simulation found for strategy %d", strategyID)
 	}
 
@@ -335,6 +367,13 @@ func (s *SimulationService) StopSimulation(strategyID int64) error {
 	sim.StopRequested = true
 	sim.IsRunning = false
 	sim.mu.Unlock()
+
+	// Update simulation status in database immediately
+	if err := s.simulationRunRepo.UpdateStatus(simulationRunID, "completed"); err != nil {
+		s.logger.Error("Error updating simulation run status: %v", err)
+	} else {
+		s.logger.Info("Updated status of simulation run %d to completed", simulationRunID)
+	}
 
 	// Cancel all goroutines
 	if sim.cancel != nil {
@@ -370,13 +409,12 @@ func (s *SimulationService) runSimulation(ctx *SimulationContext) {
 	// Notify about simulation start
 	s.sendSimulationEvent(ctx, "simulation_started", nil)
 
-	// Define simulation parameters - increasing interval to avoid too frequent evaluations
-	// which could lead to excessive database load and rapidly depleting the available token pool
-	iterationInterval := 10 * time.Second // Increased from 3 seconds to 10 seconds for more sustainable simulation
+	// Define simulation parameters
+	// Use shorter interval for more frequent evaluations
+	iterationInterval := 3 * time.Second // Use 3 seconds interval for more frequent token evaluation
 
 	// Create a ticker for iteration intervals
 	ticker := time.NewTicker(iterationInterval)
-	defer ticker.Stop()
 
 	// Create a done channel for this simulation
 	done := make(chan bool)
@@ -402,7 +440,6 @@ func (s *SimulationService) runSimulation(ctx *SimulationContext) {
 				break
 			}
 
-			iteration++
 			s.logger.Info("Completed iteration %d for strategy %d", iteration, ctx.StrategyID)
 
 			// Sleep for the iteration interval
@@ -418,12 +455,13 @@ func (s *SimulationService) runSimulation(ctx *SimulationContext) {
 		// Mark simulation as complete when stopped
 		ctx.mu.Lock()
 		ctx.IsRunning = false
-		ctx.StopRequested = true // Make sure it's marked as requested to stop
 		ctx.mu.Unlock()
 
 		// Update simulation run status in database
 		if err := s.simulationRunRepo.UpdateStatus(ctx.SimulationRunID, "completed"); err != nil {
 			s.logger.Error("Error updating simulation run status: %v", err)
+		} else {
+			s.logger.Info("Updated status of simulation run %d to completed", ctx.SimulationRunID)
 		}
 
 		// Calculate and save simulation metrics
@@ -456,10 +494,10 @@ func (s *SimulationService) runSimulation(ctx *SimulationContext) {
 
 // runSimulationIteration runs a single iteration of the simulation
 func (s *SimulationService) runSimulationIteration(ctx *SimulationContext) error {
-	// Fetch tokens to evaluate - using a much longer age window to get more tokens
-	// Increased from 5 minutes to 24 hours to have more tokens for trading
-	maxAgeSec := int64(86400)                                                                   // 24 hours instead of 5 minutes
-	tokens, err := s.tokenRepo.GetFilteredTokens(ctx.Config.MarketCapThreshold, maxAgeSec, 200) // Increased limit from 100 to 200
+	// Fetch tokens to evaluate - using a shorter age window to focus on fresh tokens
+	// Changed back from 24 hours to 5 minutes to focus on newest tokens
+	maxAgeSec := int64(300)
+	tokens, err := s.tokenRepo.GetFilteredTokens(ctx.Config.MarketCapThreshold, maxAgeSec, 100)
 	if err != nil {
 		return fmt.Errorf("error fetching tokens for simulation: %v", err)
 	}
@@ -499,9 +537,9 @@ func (s *SimulationService) runSimulationIteration(ctx *SimulationContext) error
 			s.logger.Info("Simulation progress: %d/%d tokens evaluated", i, len(tokens))
 		}
 
-		// Check if we already have a trade for this token
+		// Check if we already have any trade for this token
 		if s.hasExistingTrade(ctx, token.ID) {
-			continue // Skip tokens we've already evaluated
+			continue // Skip tokens we've already traded
 		}
 
 		// Add to wait group and start evaluation in worker pool
@@ -534,15 +572,24 @@ func (s *SimulationService) runSimulationIteration(ctx *SimulationContext) error
 
 // hasExistingTrade checks if we already have any trade (active or completed) for this token
 func (s *SimulationService) hasExistingTrade(ctx *SimulationContext, tokenID int64) bool {
+	// First check in-memory trades
 	ctx.tokensMu.RLock()
-	defer ctx.tokensMu.RUnlock()
-
 	for _, existingTrade := range ctx.Trades {
 		if existingTrade.TokenID == tokenID {
+			ctx.tokensMu.RUnlock()
 			return true
 		}
 	}
-	return false
+	ctx.tokensMu.RUnlock()
+
+	// Then check database for previous trades with this token and strategy
+	tradeExists, err := s.simulatedTradeRepo.ExistsByStrategyIDAndTokenID(ctx.StrategyID, tokenID)
+	if err != nil {
+		s.logger.Error("Error checking for existing trade in database: %v", err)
+		return false // Default to false if there's an error
+	}
+
+	return tradeExists
 }
 
 // hasActiveTradeForToken checks if we already have an ACTIVE trade for this token
@@ -597,17 +644,12 @@ func (s *SimulationService) evaluateToken(ctx *SimulationContext, token *models.
 		return nil
 	}
 
-	// We've removed the token age restriction here that was previously limiting evaluation
-	// to only tokens less than 3 minutes old. This restriction was causing simulations
-	// to end prematurely after only 1-2 trades because there weren't enough qualifying tokens.
-	// Now we evaluate all tokens regardless of age, allowing for longer-running simulations
-	// with more trading opportunities.
-	/*
-		now := time.Now().Unix()
-		if now-token.CreatedTimestamp > 180 { // 3 min = 180 seconds
-			return nil // Skip older tokens
-		}
-	*/
+	// We're adding back the token age restriction to focus on fresh tokens
+	// This ensures we're looking at the newest tokens on the market
+	now := time.Now().Unix()
+	if now-token.CreatedTimestamp/1000 > 180 { // 3 min = 180 seconds
+		return nil // Skip older tokens
+	}
 
 	// Check if token meets basic criteria like market cap threshold
 	const marketCapLowerTolerance = -10.0
@@ -641,12 +683,9 @@ func (s *SimulationService) evaluateToken(ctx *SimulationContext, token *models.
 		return nil // No entry signal detected
 	}
 
-	// Add random chance (40%) to skip some qualifying tokens
-	// This helps pace the simulation and avoid depleting all trading opportunities too quickly
-	// Creating a more natural trading pattern and extending simulation runtime
-	if rand.Float64() > 0.6 {
-		return nil // Randomly skip this trade opportunity
-	}
+	// We've removed the random skip to ensure we evaluate all qualifying tokens
+	// This ensures maximum trading opportunities are captured
+	// Original code had a 40% chance to skip tokens
 
 	entryPrice, err := s.calculateConsistentPrice(token.ID)
 	if err != nil {
@@ -714,6 +753,8 @@ func (s *SimulationService) evaluateToken(ctx *SimulationContext, token *models.
 	s.logger.Info("Trade opened for %s: Entry Price: %.6f, Balance remaining: %.6f SOL",
 		token.Symbol, entryPrice, ctx.CurrentBalance)
 
+	s.sendSimulationStatusUpdate(ctx)
+
 	// Start trade monitoring in a separate goroutine
 	ctx.wg.Add(1)
 	go s.monitorTrade(ctx, simTrade, token)
@@ -738,7 +779,7 @@ func (s *SimulationService) monitorTrade(ctx *SimulationContext, trade *models.S
 		stopLossLevel, ctx.Config.StopLossPct)
 
 	// Loop to check prices at regular intervals
-	ticker := time.NewTicker(10 * time.Second) // Increased from 3 seconds to 10 seconds for consistency with simulation interval
+	ticker := time.NewTicker(3 * time.Second) // Changed back to 3 seconds for more frequent price checks
 	defer ticker.Stop()
 
 	entryTime := time.Unix(trade.EntryTimestamp, 0)
@@ -901,6 +942,8 @@ func (s *SimulationService) closeTradeWithReason(trade *models.SimulatedTrade, t
 		"exit_market_cap":  token.UsdMarketCap,
 		"usd_market_cap":   token.UsdMarketCap,
 	})
+
+	s.sendSimulationStatusUpdate(ctx)
 }
 
 // analyzeEntrySignal determines if a token should be bought based on strategy rules
@@ -917,6 +960,10 @@ func (s *SimulationService) analyzeEntrySignal(ctx *SimulationContext, token *mo
 
 	// Calculate lookback window
 	lookbackTime := now - int64(ctx.Config.EntryTimeWindowSec)
+
+	// Log time information for debugging
+	s.logger.Info("Current time: %d, Lookback window: %d (%d seconds ago)",
+		now, lookbackTime, ctx.Config.EntryTimeWindowSec)
 
 	// Analyze trades
 	for _, trade := range trades {
@@ -958,37 +1005,180 @@ func (s *SimulationService) sendSimulationEvent(ctx *SimulationContext, eventTyp
 		return
 	}
 
-	event := map[string]interface{}{
-		"type":        eventType,
-		"strategy_id": ctx.StrategyID,
-		"timestamp":   time.Now().Unix(),
-	}
+	// Create a timestamp once to ensure consistency
+	now := time.Now()
+	unixTimestamp := now.Unix()
 
-	// Add additional data if provided
-	if data != nil {
-		for k, v := range data {
-			event[k] = v
+	var eventObject dto.WebSocketMessage
+
+	// Create the appropriate event type based on event type
+	switch eventType {
+	case "simulation_started":
+		eventObject = &dto.SimulationStartedEvent{
+			BaseEventDTO: dto.BaseEventDTO{
+				Type:       eventType,
+				StrategyID: ctx.StrategyID,
+				Timestamp:  unixTimestamp,
+			},
 		}
+
+	case "simulation_completed":
+		eventObject = &dto.SimulationCompletedEvent{
+			BaseEventDTO: dto.BaseEventDTO{
+				Type:       eventType,
+				StrategyID: ctx.StrategyID,
+				Timestamp:  unixTimestamp,
+			},
+			TotalIterations:  data["total_iterations"].(int),
+			ExecutionTimeSec: data["execution_time_sec"].(float64),
+		}
+
+	case "simulation_balance_depleted":
+		eventObject = &dto.SimulationBalanceDepletedEvent{
+			BaseEventDTO: dto.BaseEventDTO{
+				Type:       eventType,
+				StrategyID: ctx.StrategyID,
+				Timestamp:  unixTimestamp,
+			},
+			RemainingBalance: data["remaining_balance"].(float64),
+			PositionSize:     data["position_size"].(float64),
+		}
+
+	case "simulation_status":
+		eventObject = &dto.SimulationStatusEvent{
+			BaseEventDTO: dto.BaseEventDTO{
+				Type:       eventType,
+				StrategyID: ctx.StrategyID,
+				Timestamp:  unixTimestamp,
+			},
+			TotalTrades:      data["total_trades"].(int),
+			ActiveTrades:     data["active_trades"].(int),
+			ProfitableTrades: data["profitable_trades"].(int),
+			LosingTrades:     data["losing_trades"].(int),
+			WinRate:          data["win_rate"].(float64),
+			ROI:              data["roi"].(float64),
+			CurrentBalance:   data["current_balance"].(float64),
+			InitialBalance:   data["initial_balance"].(float64),
+		}
+
+	case "trade_executed":
+		eventObject = &dto.TradeExecutedEvent{
+			BaseEventDTO: dto.BaseEventDTO{
+				Type:       eventType,
+				StrategyID: ctx.StrategyID,
+				Timestamp:  unixTimestamp,
+			},
+			TokenID:        data["token_id"].(int64),
+			TokenSymbol:    data["token_symbol"].(string),
+			TokenName:      data["token_name"].(string),
+			TokenMint:      data["token_mint"].(string),
+			ImageUrl:       data["image_url"].(string),
+			TwitterUrl:     data["twitter_url"].(string),
+			WebsiteUrl:     data["website_url"].(string),
+			Action:         data["action"].(string),
+			Price:          data["price"].(float64),
+			Amount:         data["amount"].(float64),
+			EntryMarketCap: data["entry_market_cap"].(float64),
+			UsdMarketCap:   data["usd_market_cap"].(float64),
+			CurrentBalance: data["current_balance"].(float64),
+		}
+
+		// Conditional signal data
+		if signalData, ok := data["signal_data"].(map[string]interface{}); ok {
+			tradeEvent := eventObject.(*dto.TradeExecutedEvent)
+			tradeEvent.SignalData = signalData
+		}
+
+	case "trade_closed":
+		eventObject = &dto.TradeClosedEvent{
+			BaseEventDTO: dto.BaseEventDTO{
+				Type:       eventType,
+				StrategyID: ctx.StrategyID,
+				Timestamp:  unixTimestamp,
+			},
+			TokenID:        data["token_id"].(int64),
+			TokenSymbol:    data["token_symbol"].(string),
+			TokenName:      data["token_name"].(string),
+			TokenMint:      data["token_mint"].(string),
+			ImageUrl:       data["image_url"].(string),
+			TwitterUrl:     data["twitter_url"].(string),
+			WebsiteUrl:     data["website_url"].(string),
+			Action:         data["action"].(string),
+			EntryPrice:     data["entry_price"].(float64),
+			ExitPrice:      data["exit_price"].(float64),
+			ProfitLoss:     data["profit_loss"].(float64),
+			ProfitLossPct:  data["profit_loss_pct"].(float64),
+			ExitReason:     data["exit_reason"].(string),
+			EntryMarketCap: data["entry_market_cap"].(float64),
+			ExitMarketCap:  data["exit_market_cap"].(float64),
+			UsdMarketCap:   data["usd_market_cap"].(float64),
+		}
+
+	default:
+		// For unknown event types, create a generic map
+		genericEvent := make(map[string]interface{})
+		genericEvent["type"] = eventType
+		genericEvent["strategy_id"] = ctx.StrategyID
+		genericEvent["timestamp"] = unixTimestamp
+
+		// Add all additional data
+		for k, v := range data {
+			genericEvent[k] = v
+		}
+
+		// Create event model
+		simulationEvent := &models.SimulationEvent{
+			StrategyID:      ctx.StrategyID,
+			SimulationRunID: ctx.SimulationRunID,
+			EventType:       eventType,
+			EventData:       models.JSONB(genericEvent),
+			Timestamp:       now,
+			CreatedAt:       now,
+		}
+
+		// Save event to database
+		_, err := s.simulationEventRepo.Save(simulationEvent)
+		if err != nil {
+			s.logger.Error("Error saving simulation event to database: %v", err)
+			return
+		}
+
+		// Broadcast the event
+		s.wsHub.BroadcastJSON(genericEvent)
+		return
 	}
 
-	// Create event model
+	// Create event model for typed events
+	eventData, err := json.Marshal(eventObject)
+	if err != nil {
+		s.logger.Error("Error marshaling event data: %v", err)
+		return
+	}
+
+	var jsonData map[string]interface{}
+	if err := json.Unmarshal(eventData, &jsonData); err != nil {
+		s.logger.Error("Error unmarshaling event data: %v", err)
+		return
+	}
+
 	simulationEvent := &models.SimulationEvent{
 		StrategyID:      ctx.StrategyID,
 		SimulationRunID: ctx.SimulationRunID,
 		EventType:       eventType,
-		EventData:       models.JSONB(event),
-		Timestamp:       time.Now(),
-		CreatedAt:       time.Now(),
+		EventData:       models.JSONB(jsonData),
+		Timestamp:       now,
+		CreatedAt:       now,
 	}
 
 	// Save event to database
-	_, err := s.simulationEventRepo.Save(simulationEvent)
+	_, err = s.simulationEventRepo.Save(simulationEvent)
 	if err != nil {
 		s.logger.Error("Error saving simulation event to database: %v", err)
+		return
 	}
 
-	// Broadcast the event
-	s.wsHub.BroadcastJSON(event)
+	// Broadcast the event via WebSocket
+	s.wsHub.BroadcastJSON(eventObject)
 }
 
 // GetSimulationSummary returns a summary of all simulated trades for a strategy
@@ -1111,8 +1301,12 @@ func (s *SimulationService) calculateInMemorySummary(sim *SimulationContext) map
 
 // calculatePriceWithRefresh calculates current price based on latest trades
 func (s *SimulationService) calculatePriceWithRefresh(tokenID int64) (float64, error) {
-	// Get recent trades
-	latestTrades, err := s.tradeRepo.GetTradesByTokenID(tokenID, 10)
+	// Create context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Get recent trades with context - force latest data with no cache
+	latestTrades, err := s.tradeRepo.GetTradesByTokenIDWithContext(ctx, tokenID, 10)
 	if err != nil {
 		return 0, fmt.Errorf("error fetching trades: %v", err)
 	}
@@ -1214,4 +1408,133 @@ func (s *SimulationService) saveSimulationMetrics(ctx *SimulationContext) error 
 	}
 
 	return nil
+}
+
+// GetRunningSimulations returns all currently running simulations
+func (s *SimulationService) GetRunningSimulations() []*dto.SimulationStatusDTO {
+	s.activeSimsMu.RLock()
+	defer s.activeSimsMu.RUnlock()
+
+	runningSimulations := make([]*dto.SimulationStatusDTO, 0, len(s.activeSims))
+
+	for strategyID, sim := range s.activeSims {
+		sim.mu.RLock()
+		isRunning := sim.IsRunning
+		sim.mu.RUnlock()
+
+		if isRunning {
+			// Get active trades count
+			sim.tokensMu.RLock()
+			activeTrades := 0
+			completedTrades := 0
+			for _, trade := range sim.Trades {
+				if trade.Status == "active" {
+					activeTrades++
+				} else if trade.Status == "completed" || trade.Status == "closed" {
+					completedTrades++
+				}
+			}
+			sim.tokensMu.RUnlock()
+
+			// Calculate metrics
+			summary := s.calculateInMemorySummary(sim)
+
+			// Create DTO with configuration details
+			simDTO := &dto.SimulationStatusDTO{
+				StrategyID:       strategyID,
+				StrategyName:     sim.Strategy.Name,
+				IsRunning:        isRunning,
+				StartTime:        sim.StartTime.Unix(),
+				ExecutionTimeSec: time.Since(sim.StartTime).Seconds(),
+				TotalTrades:      summary["total_trades"].(int),
+				ActiveTrades:     activeTrades,
+				ProfitableTrades: summary["profitable_trades"].(int),
+				LosingTrades:     summary["losing_trades"].(int),
+				WinRate:          summary["win_rate"].(float64),
+				TotalProfit:      summary["total_profit"].(float64),
+				TotalLoss:        summary["total_loss"].(float64),
+				AvgProfit:        summary["avg_profit"].(float64),
+				AvgLoss:          summary["avg_loss"].(float64),
+				MaxDrawdown:      summary["max_drawdown"].(float64),
+				NetPnL:           summary["total_profit"].(float64) + summary["total_loss"].(float64),
+				InitialBalance:   sim.InitialBalance,
+				CurrentBalance:   sim.CurrentBalance,
+				ROI:              summary["roi"].(float64),
+				SimConfig: &dto.SimConfigDTO{
+					InitialBalance:       sim.Config.InitialBalance,
+					FixedPositionSizeSol: sim.Config.FixedPositionSizeSol,
+					MarketCapThreshold:   sim.Config.MarketCapThreshold,
+					TakeProfitPct:        sim.Config.TakeProfitPct,
+					StopLossPct:          sim.Config.StopLossPct,
+					MaxHoldTimeSec:       sim.Config.MaxHoldTimeSec,
+					EntryTimeWindowSec:   sim.Config.EntryTimeWindowSec,
+					MinBuysForEntry:      sim.Config.MinBuysForEntry,
+				},
+			}
+
+			runningSimulations = append(runningSimulations, simDTO)
+		}
+	}
+
+	s.logger.Info("Found %d running simulations", len(runningSimulations))
+	return runningSimulations
+}
+
+// sendSimulationStatusUpdate sends current simulation status via WebSocket
+func (s *SimulationService) sendSimulationStatusUpdate(ctx *SimulationContext) {
+	// Calculate active trades count
+	ctx.tokensMu.RLock()
+	activeTrades := 0
+	profitableTrades := 0
+	losingTrades := 0
+	totalTrades := 0
+
+	for _, trade := range ctx.Trades {
+		if trade.Status == "active" {
+			activeTrades++
+		} else if trade.Status == "completed" || trade.Status == "closed" {
+			totalTrades++
+			if trade.ProfitLoss != nil {
+				if *trade.ProfitLoss > 0 {
+					profitableTrades++
+				} else {
+					losingTrades++
+				}
+			}
+		}
+	}
+	ctx.tokensMu.RUnlock()
+
+	// Get current balance and initial balance
+	ctx.mu.RLock()
+	currentBalance := ctx.CurrentBalance
+	initialBalance := ctx.InitialBalance
+	ctx.mu.RUnlock()
+
+	// Calculate ROI
+	roi := 0.0
+	if initialBalance > 0 {
+		roi = ((currentBalance / initialBalance) - 1.0) * 100.0
+	}
+
+	// Calculate win rate
+	winRate := 0.0
+	if totalTrades > 0 {
+		winRate = float64(profitableTrades) / float64(totalTrades) * 100.0
+	}
+
+	// Send status event
+	s.sendSimulationEvent(ctx, "simulation_status", map[string]interface{}{
+		"total_trades":      totalTrades,
+		"active_trades":     activeTrades,
+		"profitable_trades": profitableTrades,
+		"losing_trades":     losingTrades,
+		"win_rate":          winRate,
+		"roi":               roi,
+		"current_balance":   currentBalance,
+		"initial_balance":   initialBalance,
+	})
+
+	s.logger.Info("Sent simulation status update: Balance=%.6f, ROI=%.2f%%, Win Rate=%.2f%%",
+		currentBalance, roi, winRate)
 }

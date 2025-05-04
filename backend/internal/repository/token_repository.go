@@ -166,7 +166,7 @@ func (r *TokenRepository) GetRecentTokens(limit int) ([]*models.Token, error) {
 // GetFilteredTokens retrieves tokens based on market cap and time criteria
 func (r *TokenRepository) GetFilteredTokens(minMarketCapUSD float64, maxAgeSeconds int64, limit int) ([]*models.Token, error) {
 	// Calculate the minimum timestamp
-	minTimestamp := time.Now().Unix() - maxAgeSeconds
+	minTimestamp := (time.Now().Unix() - maxAgeSeconds) * 1000
 
 	query := `
         SELECT id, mint_address, creator_address, name, symbol, image_url, twitter_url, website_url, telegram_url, metadata_url, 

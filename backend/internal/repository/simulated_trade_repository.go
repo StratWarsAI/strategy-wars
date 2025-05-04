@@ -649,3 +649,35 @@ func (r *SimulatedTradeRepository) GetBySimulationRunWithContext(ctx context.Con
 	r.logger.Info("Retrieved %d simulated trades for simulation run %d", len(trades), simulationRunID)
 	return trades, nil
 }
+
+// ExistsByStrategyIDAndTokenID checks if a trade exists for a given strategy and token
+func (r *SimulatedTradeRepository) ExistsByStrategyIDAndTokenID(strategyID int64, tokenID int64) (bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return r.ExistsByStrategyIDAndTokenIDWithContext(ctx, strategyID, tokenID)
+}
+
+// ExistsByStrategyIDAndTokenIDWithContext checks if a trade exists with context
+func (r *SimulatedTradeRepository) ExistsByStrategyIDAndTokenIDWithContext(ctx context.Context, strategyID int64, tokenID int64) (bool, error) {
+	query := `
+        SELECT EXISTS(
+            SELECT 1 FROM simulated_trades 
+            WHERE strategy_id = $1 AND token_id = $2
+        )
+    `
+
+	r.logger.Debug("Checking if trade exists for strategy %d and token %d", strategyID, tokenID)
+
+	var exists bool
+	err := r.db.QueryRowContext(ctx, query, strategyID, tokenID).Scan(&exists)
+	if err != nil {
+		if ctx.Err() != nil {
+			r.logger.Error("Context deadline exceeded while checking trade existence: %v", err)
+			return false, fmt.Errorf("context deadline exceeded while checking trade existence: %v", err)
+		}
+		r.logger.Error("Error checking trade existence: %v", err)
+		return false, fmt.Errorf("error checking trade existence: %v", err)
+	}
+
+	return exists, nil
+}

@@ -26,6 +26,25 @@ type Strategy struct {
 	UpdatedAt       time.Time `json:"-"`
 }
 
+type StrategyConfig struct {
+	// Entry conditions
+	MarketCapThreshold float64 `json:"marketCapThreshold"` // Minimum market cap in USD
+	OnlyNewTokens      bool    `json:"only_new_tokens"`
+	MinBuysForEntry    int     `json:"minBuysForEntry"`    // Minimum buy trades to trigger entry
+	EntryTimeWindowSec int     `json:"entryTimeWindowSec"` // Time window for counting buys (seconds)
+
+	// Exit conditions
+	TakeProfitPct  float64 `json:"takeProfitPct"`  // Take profit percentage
+	StopLossPct    float64 `json:"stopLossPct"`    // Stop loss percentage
+	MaxHoldTimeSec int     `json:"maxHoldTimeSec"` // Maximum hold time (seconds)
+
+	// Position sizing
+	FixedPositionSizeSol float64 `json:"fixedPositionSizeSol"` // Fixed position size in SOL
+
+	InitialBalance   float64 `json:"initialBalance"`      // Initial balance in SOL
+	MaxTokensToTrack int     `json:"max_tokens_to_track"` // Maximum number of tokens to track
+}
+
 // Simulation runs a trading simulation
 type SimulationRun struct {
 	ID                   int64     `json:"-"`

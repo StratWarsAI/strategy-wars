@@ -30,6 +30,7 @@ type Server struct {
 	simulationService   *service.SimulationService
 	automationService   *service.AutomationService
 	triggerHandler      *handlers.TriggerHandler
+	simulationHandler   *handlers.SimulationHandler
 	performanceAnalyzer *service.AIPerformanceAnalyzer
 }
 
@@ -117,6 +118,12 @@ func NewServer(port int, db *sql.DB, cfg *config.Config, logger *logger.Logger) 
 		performanceAnalyzer,
 		logger,
 	)
+	
+	// Create simulation handler
+	simulationHandler := handlers.NewSimulationHandler(
+		simulationService,
+		logger,
+	)
 
 	server := &Server{
 		app:                 app,
@@ -130,6 +137,7 @@ func NewServer(port int, db *sql.DB, cfg *config.Config, logger *logger.Logger) 
 		simulationService:   simulationService,
 		automationService:   automationService,
 		triggerHandler:      triggerHandler,
+		simulationHandler:   simulationHandler,
 		performanceAnalyzer: performanceAnalyzer,
 	}
 
@@ -174,6 +182,13 @@ func (s *Server) registerRoutes() {
 		s.triggerHandler.RegisterRoutes(api)
 	} else {
 		s.logger.Warn("Trigger handler is nil, routes not registered")
+	}
+	
+	// Register simulation routes
+	if s.simulationHandler != nil {
+		s.simulationHandler.RegisterRoutes(api)
+	} else {
+		s.logger.Warn("Simulation handler is nil, routes not registered")
 	}
 }
 

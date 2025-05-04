@@ -21,6 +21,7 @@ type TokenRepositoryInterface interface {
 type TradeRepositoryInterface interface {
 	Save(trade *models.Trade) (int64, error)
 	GetTradesByTokenID(tokenID int64, limit int) ([]*models.Trade, error)
+	GetTradesByTokenIDWithContext(ctx context.Context, tokenID int64, limit int) ([]*models.Trade, error)
 	GetTradesBySignature(signature string) (*models.Trade, error)
 }
 
@@ -95,6 +96,8 @@ type SimulatedTradeRepositoryInterface interface {
 	GetTradesByTokenIDWithContext(ctx context.Context, tokenID int64, limit int) ([]*models.SimulatedTrade, error)
 	GetBySimulationRun(simulationRunID int64) ([]*models.SimulatedTrade, error)
 	GetBySimulationRunWithContext(ctx context.Context, simulationRunID int64) ([]*models.SimulatedTrade, error)
+	ExistsByStrategyIDAndTokenID(strategyID int64, tokenID int64) (bool, error)
+	ExistsByStrategyIDAndTokenIDWithContext(ctx context.Context, strategyID int64, tokenID int64) (bool, error)
 }
 
 // SimulationEventRepositoryInterface for managing simulation events

@@ -2,8 +2,10 @@
 package repository
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/StratWarsAI/strategy-wars/internal/models"
 	"github.com/StratWarsAI/strategy-wars/internal/pkg/logger"
@@ -56,6 +58,14 @@ func (r *TradeRepository) Save(trade *models.Trade) (int64, error) {
 
 // GetTradesByTokenID retrieves trades for a specific token
 func (r *TradeRepository) GetTradesByTokenID(tokenID int64, limit int) ([]*models.Trade, error) {
+	// Use the context-based version with a default timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return r.GetTradesByTokenIDWithContext(ctx, tokenID, limit)
+}
+
+// GetTradesByTokenIDWithContext retrieves trades for a specific token with context
+func (r *TradeRepository) GetTradesByTokenIDWithContext(ctx context.Context, tokenID int64, limit int) ([]*models.Trade, error) {
 	query := `
 		SELECT id, token_id, signature, sol_amount, token_amount, is_buy, user_address, timestamp
 		FROM trades 
@@ -64,15 +74,14 @@ func (r *TradeRepository) GetTradesByTokenID(tokenID int64, limit int) ([]*model
 		LIMIT $2
 	`
 
-	rows, err := r.db.Query(query, tokenID, limit)
+	rows, err := r.db.QueryContext(ctx, query, tokenID, limit)
 	if err != nil {
+		if ctx.Err() != nil {
+			return nil, fmt.Errorf("context deadline exceeded while getting trades: %v", err)
+		}
 		return nil, fmt.Errorf("error getting trades: %v", err)
 	}
-	defer func() {
-		if err := rows.Close(); err != nil {
-			r.logger.Error("Error closing rows: %v", err)
-		}
-	}()
+	defer rows.Close()
 
 	var trades []*models.Trade
 	for rows.Next() {

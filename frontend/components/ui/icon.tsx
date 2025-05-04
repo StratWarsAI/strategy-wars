@@ -2,7 +2,9 @@ import {
     ArrowRightIcon,
       Brain,
       LayoutDashboardIcon,
+      LineChart,
       LucideIcon,
+      Settings,
     } from 'lucide-react';
     
     export type Icon = LucideIcon;
@@ -10,6 +12,10 @@ import {
 export const Icons = {
     layoutDashboard: LayoutDashboardIcon,
     arrowRight: ArrowRightIcon,
-    brain: Brain
+    brain: Brain,
+    lineChart: LineChart,
+    settings: Settings,
+    
+
 };
     
