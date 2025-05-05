@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/StratWarsAI/strategy-wars/internal/config"
 	"github.com/StratWarsAI/strategy-wars/internal/models"
 	"github.com/StratWarsAI/strategy-wars/internal/pkg/logger"
 	"github.com/StratWarsAI/strategy-wars/internal/repository"
@@ -46,15 +47,26 @@ func NewAutomationService(
 	simulationService *SimulationService,
 	performanceAnalyzer *AIPerformanceAnalyzer,
 	logger *logger.Logger,
+	cfg *config.Config, // Add config parameter
 ) *AutomationService {
 	ctx, cancel := context.WithCancel(context.Background())
 	
+	// Convert minutes to time.Duration
+	strategyGenInterval := time.Duration(cfg.Automation.StrategyGenerationInterval) * time.Minute
+	perfAnalysisInterval := time.Duration(cfg.Automation.PerformanceAnalysisInterval) * time.Minute
+	
+	logger.Info("Initializing AutomationService with config: StrategyGenInterval=%v, AnalysisInterval=%v, StrategiesPerInterval=%d, MaxConcurrentSims=%d",
+		strategyGenInterval, 
+		perfAnalysisInterval,
+		cfg.Automation.StrategiesPerInterval,
+		cfg.Automation.MaxConcurrentSimulations)
+	
 	return &AutomationService{
 		config: AutomationConfig{
-			StrategyGenerationInterval: 1 * time.Hour,
-			PerformanceAnalysisInterval: 15 * time.Minute,
-			StrategiesPerInterval: 2, // Generate 2 strategies each hour
-			MaxConcurrentSimulations: 3, // Run up to 3 simulations concurrently
+			StrategyGenerationInterval: strategyGenInterval,
+			PerformanceAnalysisInterval: perfAnalysisInterval,
+			StrategiesPerInterval: cfg.Automation.StrategiesPerInterval,
+			MaxConcurrentSimulations: cfg.Automation.MaxConcurrentSimulations,
 		},
 		ctx:                 ctx,
 		cancelFunc:          cancel,
@@ -77,7 +89,27 @@ func (s *AutomationService) Start() error {
 		return fmt.Errorf("automation service is already running")
 	}
 
-	s.logger.Info("Starting automation service")
+	s.logger.Info("Starting automation service with the following configuration:")
+	s.logger.Info("- Strategy Generation Interval: %v", s.config.StrategyGenerationInterval)
+	s.logger.Info("- Performance Analysis Interval: %v", s.config.PerformanceAnalysisInterval)
+	s.logger.Info("- Strategies Per Interval: %d", s.config.StrategiesPerInterval)
+	s.logger.Info("- Max Concurrent Simulations: %d", s.config.MaxConcurrentSimulations)
+	
+	// Check if there are any running simulations at startup
+	activeRuns, err := s.simulationRunRepo.GetByStatus("running", 10)
+	if err != nil {
+		s.logger.Error("Error checking for running simulations at startup: %v", err)
+	} else {
+		if len(activeRuns) > 0 {
+			s.logger.Info("Found %d running simulations at startup. Will wait for these to complete before starting new ones.", len(activeRuns))
+			for _, run := range activeRuns {
+				s.logger.Info("Active simulation found: ID=%d, Started=%v", run.ID, run.StartTime)
+			}
+		} else {
+			s.logger.Info("No running simulations found at startup")
+		}
+	}
+	
 	s.isRunning = true
 
 	// Start the simulation queue processor
@@ -89,6 +121,7 @@ func (s *AutomationService) Start() error {
 	// Start the performance analyzer
 	go s.performanceAnalyzer.StartAutomatedAnalysis(s.ctx)
 
+	s.logger.Info("All automation service components started successfully")
 	return nil
 }
 
@@ -113,17 +146,38 @@ func (s *AutomationService) runAutomationLoop() {
 	ticker := time.NewTicker(checkInterval)
 	defer ticker.Stop()
 
+	// Periodically log the number of active simulations for monitoring
+	logTicker := time.NewTicker(5 * time.Minute)
+	defer logTicker.Stop()
+
 	for {
 		select {
 		case <-s.ctx.Done():
 			s.logger.Info("Automation loop stopped")
 			return
+		case <-logTicker.C:
+			// Log status of active simulations periodically
+			activeRuns, err := s.simulationRunRepo.GetByStatus("running", 10)
+			if err != nil {
+				s.logger.Error("Error checking for active simulations in periodic check: %v", err)
+			} else {
+				s.logger.Info("Periodic status check: %d active simulations running", len(activeRuns))
+				if len(activeRuns) > 0 {
+					for _, run := range activeRuns {
+						runningDuration := time.Since(run.StartTime)
+						s.logger.Info("  - Simulation ID=%d, Running for %v", run.ID, runningDuration)
+					}
+				}
+			}
 		case <-ticker.C:
 			// Check if it's time to generate new strategies
 			if time.Since(s.lastStrategyGenTime) >= s.config.StrategyGenerationInterval {
-				s.logger.Info("Triggering scheduled strategy generation")
+				s.logger.Info("Time for scheduled strategy generation (last gen: %v ago)", time.Since(s.lastStrategyGenTime))
 				go s.generateStrategies()
 				s.lastStrategyGenTime = time.Now()
+			} else {
+				remaining := s.config.StrategyGenerationInterval - time.Since(s.lastStrategyGenTime)
+				s.logger.Info("Next strategy generation in %v", remaining)
 			}
 
 			// Check for pending strategies that need simulation
@@ -134,6 +188,16 @@ func (s *AutomationService) runAutomationLoop() {
 
 // generateStrategies generates new AI strategies
 func (s *AutomationService) generateStrategies() {
+	// First, check if there are any active simulations running
+	activeRuns, err := s.simulationRunRepo.GetByStatus("running", 5)
+	if err != nil {
+		s.logger.Error("Error checking for active simulations before generation: %v", err)
+		// Continue with caution
+	} else if len(activeRuns) > 0 {
+		s.logger.Info("Found %d active simulations running. Will skip strategy generation this cycle.", len(activeRuns))
+		return
+	}
+
 	s.logger.Info("Generating %d new AI strategies", s.config.StrategiesPerInterval)
 
 	for i := 0; i < s.config.StrategiesPerInterval; i++ {
@@ -183,6 +247,16 @@ func (s *AutomationService) generateStrategies() {
 
 // checkPendingStrategies checks for strategies that need to be simulated
 func (s *AutomationService) checkPendingStrategies() {
+	// First, check if there are any active simulations running
+	activeRuns, err := s.simulationRunRepo.GetByStatus("running", 5)
+	if err != nil {
+		s.logger.Error("Error checking for active simulations in checkPendingStrategies: %v", err)
+		// Continue with caution
+	} else if len(activeRuns) > 0 {
+		s.logger.Info("Found %d active simulations running. Will skip checking pending strategies this cycle.", len(activeRuns))
+		return
+	}
+
 	// Get AI strategies that don't have metrics yet (never been simulated)
 	strategies, err := s.getUnsimulatedStrategies()
 	if err != nil {
@@ -290,12 +364,40 @@ func (s *AutomationService) processSimulationQueue() {
 	// Create a semaphore channel to limit concurrent simulations
 	semaphore := make(chan struct{}, s.config.MaxConcurrentSimulations)
 
+	// Create a ticker to periodically check for active simulations
+	checkTicker := time.NewTicker(30 * time.Second)
+	defer checkTicker.Stop()
+
 	for {
 		select {
 		case <-s.ctx.Done():
 			s.logger.Info("Simulation queue processor stopped")
 			return
+		case <-checkTicker.C:
+			// Periodic check for any orphaned simulations or cleanup
+			continue
 		case strategyID := <-s.simulationQueue:
+			// First, check if there are any active simulations running
+			activeRuns, err := s.simulationRunRepo.GetByStatus("running", 5)
+			if err != nil {
+				s.logger.Error("Error checking for active simulations: %v", err)
+				// Continue with caution
+			} else if len(activeRuns) > 0 {
+				s.logger.Info("Found %d active simulations running. Will not start new simulation for strategy %d yet.", 
+					len(activeRuns), strategyID)
+				
+				// Put the strategy back in the queue after a delay
+				go func(id int64) {
+					time.Sleep(1 * time.Minute)
+					s.queueStrategyForSimulation(id)
+				}(strategyID)
+				
+				// Skip starting a new simulation
+				continue
+			}
+			
+			s.logger.Info("No active simulations running, proceeding with strategy %d", strategyID)
+			
 			// Acquire a slot in the semaphore
 			semaphore <- struct{}{}
 

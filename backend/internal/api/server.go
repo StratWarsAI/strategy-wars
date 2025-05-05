@@ -63,6 +63,7 @@ func NewServer(port int, db *sql.DB, cfg *config.Config, logger *logger.Logger) 
 	simulatedTradeRepo := repository.NewSimulatedTradeRepository(db)
 	simulationRunRepo := repository.NewSimulationRunRepository(db)
 	simulationEventRepo := repository.NewSimulationEventRepository(db)
+	simulationResultRepo := repository.NewSimulationResultRepository(db)
 
 	// Create basic services
 	dataService := service.NewDataService(db, logger)
@@ -97,9 +98,11 @@ func NewServer(port int, db *sql.DB, cfg *config.Config, logger *logger.Logger) 
 		simulatedTradeRepo,
 		simulationRunRepo,
 		simulationEventRepo,
+		simulationResultRepo,
 		simulationService,
 		aiService,
 		logger,
+		cfg, // Pass configuration to use the correct analysis interval
 	)
 
 	automationService := service.NewAutomationService(
@@ -109,6 +112,7 @@ func NewServer(port int, db *sql.DB, cfg *config.Config, logger *logger.Logger) 
 		simulationService,
 		performanceAnalyzer,
 		logger,
+		cfg, // Pass the configuration object
 	)
 
 	// Create trigger handler

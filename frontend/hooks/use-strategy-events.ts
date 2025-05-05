@@ -12,6 +12,13 @@ import {
 import { useWebSocket } from '@/lib/context/web-socket-context';
 import { StrategyEvent } from '@/types';
 
+export interface PerformanceDataPoint {
+  time: string;
+  roi: number;
+  balance: number;
+  timestamp: number;
+}
+
 export function useStrategyEvents(strategyId: number | null) {
   const { lastMessage, isConnected } = useWebSocket();
   const [events, setEvents] = useState<StrategyEvent[]>([]);
@@ -23,8 +30,14 @@ export function useStrategyEvents(strategyId: number | null) {
   const [currentBalance, setCurrentBalance] = useState<number | null>(null);
   const [currentRoi, setCurrentRoi] = useState<number | null>(null);
   const [totalTrades, setTotalTrades] = useState<number | null>(null);
+  const [activeTrades, setActiveTrades] = useState<number | null>(null);
   
+  // Performance tracking
+  const [performanceData, setPerformanceData] = useState<PerformanceDataPoint[]>([]);
+  
+  // Subscribe to a strategy when component mounts
   useEffect(() => {
+    // Clear events when strategy changes
     setEvents([]);
     setTrades([]);
     setCompletedTrades([]);
@@ -33,6 +46,23 @@ export function useStrategyEvents(strategyId: number | null) {
     setCurrentBalance(null);
     setCurrentRoi(null);
     setTotalTrades(null);
+    setActiveTrades(null);
+    setPerformanceData([]);
+    
+    // Add initial data point with 0 ROI
+    if (strategyId) {
+      const initialPoint: PerformanceDataPoint = {
+        time: new Date().toLocaleTimeString([], { 
+          hour: '2-digit', 
+          minute: '2-digit',
+          second: '2-digit'
+        }),
+        roi: 0,
+        balance: 0,
+        timestamp: Math.floor(Date.now() / 1000)
+      };
+      setPerformanceData([initialPoint]);
+    }
   }, [strategyId]);
 
   // Process new messages
@@ -44,11 +74,17 @@ export function useStrategyEvents(strategyId: number | null) {
 
     processWebSocketMessage(lastMessage);
   }, [lastMessage, strategyId]);
+  
+  // Debug log performance data
+  useEffect(() => {
+    if (strategyId && performanceData.length > 0) {
+      console.log(`Performance data for strategy ${strategyId}:`, performanceData);
+    }
+  }, [performanceData, strategyId]);
 
   const processWebSocketMessage = (message: WebSocketMessage) => {
-    // Keep the original behavior for backward compatibility
+    // For trades, we keep the original processing logic
     if (message.type === 'trade_executed' && message.strategy_id === strategyId) {
-      // Add without duplicates
       setTrades(prev => {
         const exists = prev.some(t => 
           t.tokenId === (message as TradeExecutedEvent).tokenId && 
@@ -59,7 +95,6 @@ export function useStrategyEvents(strategyId: number | null) {
     }
     
     if (message.type === 'trade_closed' && message.strategy_id === strategyId) {
-      // Add without duplicates
       setCompletedTrades(prev => {
         const exists = prev.some(t => 
           t.tokenId === (message as TradeClosedEvent).tokenId && 
@@ -73,9 +108,38 @@ export function useStrategyEvents(strategyId: number | null) {
       const statusEvent = message as SimulationStatusEvent;
       setSimulationStatus(statusEvent);
       
+      // Update state values
       setCurrentBalance(statusEvent.currentBalance);
       setCurrentRoi(statusEvent.roi);
       setTotalTrades(statusEvent.totalTrades);
+      setActiveTrades(statusEvent.activeTrades);
+      
+      // Format time for display
+      const timeStr = new Date(statusEvent.timestamp * 1000).toLocaleTimeString([], { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        second: '2-digit'
+      });
+      
+      // Add new data point for performance chart
+      setPerformanceData(prev => {
+        // Check if we already have a data point with this timestamp
+        const exists = prev.some(p => p.timestamp === statusEvent.timestamp);
+        if (exists) return prev;
+        
+        // Add new data point and ensure they are sorted by timestamp
+        const updatedData = [
+          ...prev,
+          {
+            time: timeStr,
+            roi: statusEvent.roi,
+            balance: statusEvent.currentBalance,
+            timestamp: statusEvent.timestamp
+          }
+        ].sort((a, b) => a.timestamp - b.timestamp);
+        
+        return updatedData;
+      });
     }
 
     // Enhanced event processing for the unified events array
@@ -143,7 +207,6 @@ export function useStrategyEvents(strategyId: number | null) {
           timestamp: closeEvent.timestamp,
           marketCap: closeEvent.exitMarketCap || closeEvent.usdMarketCap,
         });
-        
         break;
     }
   };
@@ -152,6 +215,7 @@ export function useStrategyEvents(strategyId: number | null) {
     setEvents(prev => [event, ...prev]);
   };
   
+  // Get sorted trades
   const getSortedTrades = () => {
     return [...trades, ...completedTrades]
       .sort((a, b) => b.timestamp - a.timestamp); 
@@ -169,5 +233,7 @@ export function useStrategyEvents(strategyId: number | null) {
     currentBalance,
     currentRoi,
     totalTrades,
+    activeTrades,
+    performanceData 
   };
 }

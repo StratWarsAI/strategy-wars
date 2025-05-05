@@ -460,6 +460,61 @@ func (r *SimulatedTradeRepository) GetSummaryByStrategyIDWithContext(ctx context
 	if totalInvestment > 0 {
 		roi = (totalProfit + totalLoss) / totalInvestment * 100
 	}
+	
+	// Additionally calculate projected metrics including active trades
+	var activeTrades, activeTradeCount int
+	var totalProjectedProfit, totalProjectedLoss, totalProjectedInvestment float64
+	var projectedProfitableTrades, projectedLosingTrades, totalProjectedTrades int
+	
+	// Start with the completed trade metrics
+	totalProjectedProfit = totalProfit
+	totalProjectedLoss = totalLoss
+	totalProjectedInvestment = totalInvestment
+	projectedProfitableTrades = profitableTrades
+	projectedLosingTrades = losingTrades
+	totalProjectedTrades = totalTrades
+	
+	// Add active trades to projection
+	for _, trade := range trades {
+		if trade.Status == "active" {
+			activeTrades++
+			activeTradeCount++
+			totalProjectedInvestment += trade.PositionSize
+			totalProjectedTrades++
+			
+			// Calculate projected profit/loss based on current price vs entry price
+			// For active trades, try to estimate current value
+			var currentPrice float64
+			if trade.ExitPrice != nil {
+				currentPrice = *trade.ExitPrice
+			} else {
+				// If no exit price set, use entry price (break-even assumption)
+				currentPrice = trade.EntryPrice
+			}
+			
+			// Calculate projected PnL
+			projectedPnL := (currentPrice/trade.EntryPrice - 1.0) * trade.PositionSize
+			
+			if projectedPnL > 0 {
+				projectedProfitableTrades++
+				totalProjectedProfit += projectedPnL
+			} else {
+				projectedLosingTrades++
+				totalProjectedLoss += projectedPnL
+			}
+		}
+	}
+	
+	// Calculate projected win rate and ROI
+	projectedWinRate := 0.0
+	if totalProjectedTrades > 0 {
+		projectedWinRate = float64(projectedProfitableTrades) / float64(totalProjectedTrades) * 100
+	}
+	
+	projectedRoi := 0.0
+	if totalProjectedInvestment > 0 {
+		projectedRoi = (totalProjectedProfit + totalProjectedLoss) / totalProjectedInvestment * 100
+	}
 
 	// Calculate simulation duration in seconds
 	var durationSec int64 = 0
@@ -492,7 +547,8 @@ func (r *SimulatedTradeRepository) GetSummaryByStrategyIDWithContext(ctx context
 		avgHoldingTimeSec = totalHoldingTime / int64(completedTradeCount)
 	}
 
-	r.logger.Info("Generated performance summary for strategy %d (win rate: %.2f%%)", strategyID, winRate)
+	r.logger.Info("Generated performance summary for strategy %d (win rate: %.2f%%, projected ROI: %.2f%%)", 
+		strategyID, winRate, projectedRoi)
 
 	// Return enriched summary
 	return map[string]interface{}{
@@ -510,6 +566,11 @@ func (r *SimulatedTradeRepository) GetSummaryByStrategyIDWithContext(ctx context
 		"simulation_duration":           durationSec,
 		"avg_holding_time_sec":          avgHoldingTimeSec,
 		"total_trades_including_active": len(trades),
+		"active_trades_count":           activeTrades,
+		"projected_roi":                 projectedRoi,
+		"projected_win_rate":            projectedWinRate,
+		"projected_net_pnl":             totalProjectedProfit + totalProjectedLoss,
+		"projected_total_trades":        totalProjectedTrades,
 	}, nil
 }
 
