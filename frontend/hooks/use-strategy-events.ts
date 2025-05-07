@@ -16,6 +16,7 @@ export interface PerformanceDataPoint {
   time: string;
   roi: number;
   balance: number;
+  winRate?: number;
   timestamp: number;
 }
 
@@ -31,6 +32,7 @@ export function useStrategyEvents(strategyId: number | null) {
   const [currentRoi, setCurrentRoi] = useState<number | null>(null);
   const [totalTrades, setTotalTrades] = useState<number | null>(null);
   const [activeTrades, setActiveTrades] = useState<number | null>(null);
+  const [winRate, setWinRate] = useState<number | null>(null);
   
   // Performance tracking
   const [performanceData, setPerformanceData] = useState<PerformanceDataPoint[]>([]);
@@ -47,6 +49,7 @@ export function useStrategyEvents(strategyId: number | null) {
     setCurrentRoi(null);
     setTotalTrades(null);
     setActiveTrades(null);
+    setWinRate(null);
     setPerformanceData([]);
     
     // Add initial data point with 0 ROI
@@ -59,6 +62,7 @@ export function useStrategyEvents(strategyId: number | null) {
         }),
         roi: 0,
         balance: 0,
+        winRate: 0,
         timestamp: Math.floor(Date.now() / 1000)
       };
       setPerformanceData([initialPoint]);
@@ -113,6 +117,7 @@ export function useStrategyEvents(strategyId: number | null) {
       setCurrentRoi(statusEvent.roi);
       setTotalTrades(statusEvent.totalTrades);
       setActiveTrades(statusEvent.activeTrades);
+      setWinRate(statusEvent.winRate);
       
       // Format time for display
       const timeStr = new Date(statusEvent.timestamp * 1000).toLocaleTimeString([], { 
@@ -134,6 +139,7 @@ export function useStrategyEvents(strategyId: number | null) {
             time: timeStr,
             roi: statusEvent.roi,
             balance: statusEvent.currentBalance,
+            winRate: statusEvent.winRate,
             timestamp: statusEvent.timestamp
           }
         ].sort((a, b) => a.timestamp - b.timestamp);
@@ -234,6 +240,7 @@ export function useStrategyEvents(strategyId: number | null) {
     currentRoi,
     totalTrades,
     activeTrades,
+    winRate,
     performanceData 
   };
 }

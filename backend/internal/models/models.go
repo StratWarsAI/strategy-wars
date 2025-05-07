@@ -84,6 +84,9 @@ type StrategyMetric struct {
 	TotalTrades      int       `json:"total_trades"`
 	SuccessfulTrades int       `json:"successful_trades"`
 	RiskScore        int       `json:"risk_score"`
+	ROI              float64   `json:"roi"`               // Return on Investment
+	CurrentBalance   float64   `json:"current_balance"`   // Current balance in simulation
+	InitialBalance   float64   `json:"initial_balance"`   // Initial balance in simulation
 	CreatedAt        time.Time `json:"-"`
 }
 

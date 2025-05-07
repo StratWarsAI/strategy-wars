@@ -96,6 +96,9 @@ CREATE TABLE IF NOT EXISTS strategy_metrics (
     total_trades INTEGER,
     successful_trades INTEGER,
     risk_score INTEGER,
+    roi DECIMAL(10, 4),
+    current_balance DECIMAL(20, 9),
+    initial_balance DECIMAL(20, 9),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 

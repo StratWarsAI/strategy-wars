@@ -3,6 +3,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -108,30 +109,36 @@ func (s *AutomationService) Start() error {
 		} else {
 			s.logger.Info("No running simulations found at startup")
 			
-			// Automatically run simulations for existing strategies on startup
-			s.logger.Info("Starting automatic simulation of existing strategies...")
-			go func() {
-				// Get all AI strategies that haven't been simulated recently
-				strategies, err := s.getAllAIStrategies()
-				if err != nil {
-					s.logger.Error("Error getting AI strategies at startup: %v", err)
-					return
+			// First check if there are any strategies in the database
+			strategies, err := s.getAllAIStrategies()
+			if err != nil {
+				s.logger.Error("Error getting AI strategies at startup: %v", err)
+			} else {
+				if len(strategies) == 0 {
+					// No strategies exist, generate them immediately without waiting for the timer
+					s.logger.Info("No strategies found in database. Generating initial strategies immediately...")
+					go s.generateInitialStrategies() // Use a special method for initial generation
+					s.lastStrategyGenTime = time.Now() // Reset the timer
+				} else {
+					// Automatically run simulations for existing strategies on startup
+					s.logger.Info("Starting automatic simulation of existing strategies...")
+					go func() {
+						// Only take MaxConcurrentSimulations strategies to avoid overloading
+						count := 0
+						for _, strategy := range strategies {
+							if count >= s.config.MaxConcurrentSimulations {
+								break
+							}
+							
+							s.logger.Info("Queuing existing strategy ID=%d for automatic simulation at startup", strategy.ID)
+							s.queueStrategyForSimulation(strategy.ID)
+							count++
+						}
+						
+						s.logger.Info("Queued %d existing strategies for simulation at startup", count)
+					}()
 				}
-				
-				// Only take MaxConcurrentSimulations strategies to avoid overloading
-				count := 0
-				for _, strategy := range strategies {
-					if count >= s.config.MaxConcurrentSimulations {
-						break
-					}
-					
-					s.logger.Info("Queuing existing strategy ID=%d for automatic simulation at startup", strategy.ID)
-					s.queueStrategyForSimulation(strategy.ID)
-					count++
-				}
-				
-				s.logger.Info("Queued %d existing strategies for simulation at startup", count)
-			}()
+			}
 		}
 	}
 	
@@ -263,6 +270,9 @@ func (s *AutomationService) generateStrategies() {
 			continue
 		}
 
+		// Create initial metrics record for the strategy
+		s.createInitialStrategyMetric(id)
+
 		s.logger.Info("Successfully generated and saved new strategy %d with ID: %d", i+1, id)
 		
 		// Add strategy to simulation queue
@@ -353,6 +363,102 @@ func (s *AutomationService) getAllAIStrategies() ([]*models.Strategy, error) {
 	return aiStrategies, nil
 }
 
+// generateInitialStrategies generates the initial set of strategies when the database is empty
+// This is a special method that ensures at least 2 strategies are created at startup
+func (s *AutomationService) generateInitialStrategies() {
+	s.logger.Info("Generating initial set of strategies (ensuring %d are created)", s.config.StrategiesPerInterval)
+	
+	// Define prompts for both strategies upfront
+	prompts := []string{
+		"Generate a profitable trading strategy for cryptocurrency tokens that focuses on early entry and quick profit-taking",
+		"Generate a diversified trading strategy for cryptocurrency tokens that focuses on longer holds and larger market caps",
+	}
+	
+	// Create a wait group to ensure both strategies are generated
+	var wg sync.WaitGroup
+	wg.Add(s.config.StrategiesPerInterval)
+	
+	// Channel to collect generated strategy IDs
+	successfulIDs := make(chan int64, s.config.StrategiesPerInterval)
+	
+	// Generate strategies concurrently
+	for i := 0; i < s.config.StrategiesPerInterval; i++ {
+		go func(index int) {
+			defer wg.Done()
+			
+			// Get prompt for this strategy
+			prompt := prompts[index]
+			
+			// Make multiple attempts to generate a strategy
+			for attempt := 1; attempt <= 3; attempt++ {
+				// Get top performing strategies to learn from
+				topStrategies, err := s.aiService.GetTopPerformingStrategies()
+				if err != nil {
+					s.logger.Error("Attempt %d: Error getting top strategies: %v", attempt, err)
+					continue
+				}
+				
+				// Create metadata with top strategies
+				metadata := map[string]interface{}{
+					"top_strategies": topStrategies,
+				}
+				
+				// Generate new strategy
+				strategy, err := s.aiService.GenerateStrategy(prompt, metadata)
+				if err != nil {
+					s.logger.Error("Attempt %d: Error generating strategy %d: %v", attempt, index+1, err)
+					if attempt < 3 {
+						s.logger.Info("Retrying strategy generation (attempt %d of 3)...", attempt+1)
+						time.Sleep(2 * time.Second)
+					}
+					continue
+				}
+				
+				// Make sure strategy name is unique by adding timestamp
+				strategy.Name = fmt.Sprintf("%s (%s)", strategy.Name, time.Now().Format("20060102-1504"))
+				
+				// Save the strategy
+				id, err := s.strategyRepo.Save(strategy)
+				if err != nil {
+					s.logger.Error("Attempt %d: Error saving generated strategy: %v", attempt, err)
+					if attempt < 3 {
+						s.logger.Info("Retrying strategy save (attempt %d of 3)...", attempt+1)
+						time.Sleep(2 * time.Second)
+					}
+					continue
+				}
+				
+				// Create initial metrics even before simulation
+				s.createInitialStrategyMetric(id)
+				
+				s.logger.Info("Successfully generated and saved initial strategy %d with ID: %d", index+1, id)
+				successfulIDs <- id
+				return // Success - break out of the retry loop
+			}
+			
+			s.logger.Error("Failed to generate strategy %d after multiple attempts", index+1)
+		}(i)
+	}
+	
+	// Wait for all goroutines to complete
+	wg.Wait()
+	close(successfulIDs)
+	
+	// Count successful strategies
+	var successIDs []int64
+	for id := range successfulIDs {
+		successIDs = append(successIDs, id)
+	}
+	
+	s.logger.Info("Initial strategy generation complete. Generated %d of %d strategies successfully.", 
+		len(successIDs), s.config.StrategiesPerInterval)
+	
+	// Queue successful strategies for simulation
+	for _, id := range successIDs {
+		s.queueStrategyForSimulation(id)
+	}
+}
+
 // queueStrategyForSimulation adds a strategy to the simulation queue
 func (s *AutomationService) queueStrategyForSimulation(strategyID int64) {
 	s.runningSimulationsMu.RLock()
@@ -437,10 +543,21 @@ func (s *AutomationService) processSimulationQueue() {
 					s.runningSimulationsMu.Unlock()
 				}()
 
+				// Verify strategy exists
+				strategy, err := s.strategyRepo.GetByID(id)
+				if err != nil || strategy == nil {
+					s.logger.Error("Strategy %d not found or error retrieving: %v", id, err)
+					return
+				}
+
 				// Run the simulation
-				s.logger.Info("Starting simulation for strategy %d", id)
+				s.logger.Info("Starting simulation for strategy %d: %s", id, strategy.Name)
 				if err := s.simulationService.StartSimulation(id); err != nil {
 					s.logger.Error("Error starting simulation for strategy %d: %v", id, err)
+					
+					// If simulation failed to start, create initial metrics anyway
+					// This ensures metrics exist even if simulation doesn't run
+					s.createInitialStrategyMetric(id)
 					return
 				}
 
@@ -453,13 +570,27 @@ func (s *AutomationService) processSimulationQueue() {
 					ticker := time.NewTicker(30 * time.Second)
 					defer ticker.Stop()
 
+					var completedOrTimeoutTriggered bool
 					for {
 						select {
 						case <-ticker.C:
+							if completedOrTimeoutTriggered {
+								return
+							}
+
 							// Check if the simulation is still running
-							_, err := s.simulationService.GetSimulationStatus(id)
-							if err != nil {
-								// If error, the simulation is probably done
+							status, err := s.simulationService.GetSimulationStatus(id)
+							
+							// If error or status shows not running anymore
+							if err != nil || (status != nil && !status.IsActive()) {
+								// Check if there are metrics for this strategy
+								metric, err := s.performanceAnalyzer.strategyMetricRepo.GetLatestByStrategy(id)
+								if err != nil || metric == nil {
+									// No metrics exist, create initial metrics
+									s.logger.Info("No metrics found for completed simulation of strategy %d, creating initial metrics", id)
+									s.createInitialStrategyMetric(id)
+								}
+								completedOrTimeoutTriggered = true
 								simulationDone <- true
 								return
 							}
@@ -476,6 +607,14 @@ func (s *AutomationService) processSimulationQueue() {
 					if err := s.simulationService.StopSimulation(id); err != nil {
 						s.logger.Error("Error stopping simulation for strategy %d: %v", id, err)
 					}
+					
+					// Check if metrics exist after timeout
+					metric, err := s.performanceAnalyzer.strategyMetricRepo.GetLatestByStrategy(id)
+					if err != nil || metric == nil {
+						// No metrics exist, create initial metrics
+						s.logger.Info("No metrics found after timeout for strategy %d, creating initial metrics", id)
+						s.createInitialStrategyMetric(id)
+					}
 				}
 
 				// After simulation, trigger performance analysis
@@ -484,5 +623,66 @@ func (s *AutomationService) processSimulationQueue() {
 				}
 			}(strategyID)
 		}
+	}
+}
+
+// createInitialStrategyMetric creates an initial metric record for a strategy
+// This ensures that even if a simulation doesn't run or fails, there's always a metric record
+func (s *AutomationService) createInitialStrategyMetric(strategyID int64) {
+	s.logger.Info("Creating initial metric record for strategy %d", strategyID)
+	
+	// Get the strategy to retrieve its risk score
+	strategy, err := s.strategyRepo.GetByID(strategyID)
+	if err != nil || strategy == nil {
+		s.logger.Error("Failed to get strategy %d for creating initial metrics: %v", strategyID, err)
+		return
+	}
+	
+	// Get current simulation run if any
+	var simulationRunID *int64
+	currentRun, err := s.simulationRunRepo.GetCurrent()
+	if err == nil && currentRun != nil {
+		simulationRunID = &currentRun.ID
+	}
+	
+	// Parse strategy config to get the correct balance values
+	var config models.StrategyConfig
+	configData, err := json.Marshal(strategy.Config)
+	if err != nil {
+		s.logger.Error("Error marshaling strategy config: %v", err)
+		return
+	}
+
+	if err := json.Unmarshal(configData, &config); err != nil {
+		s.logger.Error("Error unmarshaling strategy config: %v", err)
+		return
+	}
+
+	// Use actual balance from strategy config
+	initialBalance := config.InitialBalance
+
+	// Create initial metric with values from strategy config
+	metric := &models.StrategyMetric{
+		StrategyID:       strategyID,
+		SimulationRunID:  simulationRunID,
+		WinRate:          0,
+		AvgProfit:        0,
+		AvgLoss:          0,
+		MaxDrawdown:      0,
+		TotalTrades:      0,
+		SuccessfulTrades: 0,
+		RiskScore:        strategy.RiskScore,
+		ROI:              0,
+		CurrentBalance:   initialBalance, // Use the actual initial balance from config
+		InitialBalance:   initialBalance, // Use the actual initial balance from config
+		CreatedAt:        time.Now(),
+	}
+	
+	// Save the metric
+	_, err = s.performanceAnalyzer.strategyMetricRepo.Save(metric)
+	if err != nil {
+		s.logger.Error("Failed to save initial metrics for strategy %d: %v", strategyID, err)
+	} else {
+		s.logger.Info("Successfully saved initial metrics for strategy %d", strategyID)
 	}
 }

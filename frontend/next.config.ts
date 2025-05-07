@@ -57,6 +57,21 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "pumpbucket.party",
         pathname: "/**"
+      },
+      {
+        protocol: "https",
+        hostname: "gateway.pinata.cloud",
+        pathname: "/ipfs/**"
+      },
+      {
+        protocol: "https",
+        hostname: "wsrv.nl",
+        pathname: "/**"
+      },
+      {
+        protocol: "http",
+        hostname: "172.86.93.253:3000",
+        pathname: "/**"
       }
     ]
   }

@@ -46,6 +46,8 @@ type StrategyMetricRepositoryInterface interface {
 	GetByStrategy(strategyID int64) ([]*models.StrategyMetric, error)
 	GetBySimulationRun(simulationRunID int64) ([]*models.StrategyMetric, error)
 	GetLatestByStrategy(strategyID int64) (*models.StrategyMetric, error)
+	GetLatestByStrategyAndSimulation(strategyID int64, simulationRunID *int64) (*models.StrategyMetric, error)
+	UpdateLatestByStrategy(metric *models.StrategyMetric) error
 }
 
 // SimulationRunRepositoryInterface for managing simulation runs

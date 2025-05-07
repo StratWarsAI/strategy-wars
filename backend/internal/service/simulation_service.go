@@ -159,10 +159,15 @@ func (s *SimulationService) ResetStuckSimulations() error {
 	return nil
 }
 
-// monitorSimulations cleans up completed simulations
+// monitorSimulations cleans up completed simulations and periodically updates metrics
 func (s *SimulationService) monitorSimulations() {
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
+	// Ticker for checking stalled simulations (every 30 seconds)
+	stalledCheckTicker := time.NewTicker(30 * time.Second)
+	// Ticker for periodically updating metrics (every 1 minute)
+	metricsUpdateTicker := time.NewTicker(1 * time.Minute)
+
+	defer stalledCheckTicker.Stop()
+	defer metricsUpdateTicker.Stop()
 
 	for {
 		select {
@@ -171,9 +176,29 @@ func (s *SimulationService) monitorSimulations() {
 		case strategyID := <-s.simulationDone:
 			s.logger.Info("Simulation for strategy %d completed", strategyID)
 			s.cleanupSimulation(strategyID)
-		case <-ticker.C:
+		case <-stalledCheckTicker.C:
 			// Periodically check for stalled simulations
 			s.checkStalledSimulations()
+		case <-metricsUpdateTicker.C:
+			// Periodically update metrics for all running simulations
+			s.updateAllSimulationMetrics()
+		}
+	}
+}
+
+// updateAllSimulationMetrics updates metrics for all running simulations
+func (s *SimulationService) updateAllSimulationMetrics() {
+	s.activeSimsMu.RLock()
+	defer s.activeSimsMu.RUnlock()
+
+	for _, sim := range s.activeSims {
+		sim.mu.RLock()
+		isRunning := sim.IsRunning
+		sim.mu.RUnlock()
+
+		if isRunning {
+			// Update metrics for this running simulation
+			s.sendSimulationStatusUpdate(sim)
 		}
 	}
 }
@@ -567,6 +592,9 @@ func (s *SimulationService) runSimulationIteration(ctx *SimulationContext) error
 	// Wait for all token evaluations to complete
 	processWg.Wait()
 
+	// Update and save metrics after each iteration to track real-time performance
+	s.sendSimulationStatusUpdate(ctx)
+
 	return nil
 }
 
@@ -943,6 +971,7 @@ func (s *SimulationService) closeTradeWithReason(trade *models.SimulatedTrade, t
 		"usd_market_cap":   token.UsdMarketCap,
 	})
 
+	// Update simulation status and save metrics after every trade close
 	s.sendSimulationStatusUpdate(ctx)
 }
 
@@ -1373,7 +1402,7 @@ func (s *SimulationService) saveSimulationMetrics(ctx *SimulationContext) error 
 	// Calculate metrics
 	metrics := s.calculateInMemorySummary(ctx)
 
-	// Create strategy metric model
+	// Create strategy metric model for final metrics (at simulation completion)
 	strategyMetric := &models.StrategyMetric{
 		StrategyID:       ctx.StrategyID,
 		SimulationRunID:  &ctx.SimulationRunID,
@@ -1384,16 +1413,20 @@ func (s *SimulationService) saveSimulationMetrics(ctx *SimulationContext) error 
 		TotalTrades:      metrics["total_trades"].(int),
 		SuccessfulTrades: metrics["profitable_trades"].(int),
 		RiskScore:        ctx.Strategy.RiskScore,
+		ROI:              metrics["roi"].(float64),
+		CurrentBalance:   ctx.CurrentBalance,
+		InitialBalance:   ctx.InitialBalance,
 		CreatedAt:        time.Now(),
 	}
 
-	// Save to database
+	// For final metrics, we create a new record instead of updating
+	// This is to maintain a history of final metrics for each simulation run
 	metricID, err := s.strategyMetricRepo.Save(strategyMetric)
 	if err != nil {
-		return fmt.Errorf("error saving strategy metrics: %v", err)
+		return fmt.Errorf("error saving final strategy metrics: %v", err)
 	}
 
-	s.logger.Info("Saved strategy metrics with ID %d for strategy %d", metricID, ctx.StrategyID)
+	s.logger.Info("Saved final strategy metrics with ID %d for strategy %d", metricID, ctx.StrategyID)
 
 	// If this is a winning strategy and ROI is positive, update the simulation run with this strategy as winner
 	roi := metrics["roi"].(float64)
@@ -1545,6 +1578,7 @@ func (s *SimulationService) GetRunningSimulations() []*dto.SimulationStatusDTO {
 }
 
 // sendSimulationStatusUpdate sends current simulation status via WebSocket
+// and also saves the current metrics to the database
 func (s *SimulationService) sendSimulationStatusUpdate(ctx *SimulationContext) {
 	// Calculate active trades count
 	ctx.tokensMu.RLock()
@@ -1552,6 +1586,7 @@ func (s *SimulationService) sendSimulationStatusUpdate(ctx *SimulationContext) {
 	profitableTrades := 0
 	losingTrades := 0
 	totalTrades := 0
+	var totalProfit, totalLoss float64
 
 	for _, trade := range ctx.Trades {
 		if trade.Status == "active" {
@@ -1561,8 +1596,10 @@ func (s *SimulationService) sendSimulationStatusUpdate(ctx *SimulationContext) {
 			if trade.ProfitLoss != nil {
 				if *trade.ProfitLoss > 0 {
 					profitableTrades++
+					totalProfit += *trade.ProfitLoss
 				} else {
 					losingTrades++
+					totalLoss += *trade.ProfitLoss
 				}
 			}
 		}
@@ -1587,6 +1624,18 @@ func (s *SimulationService) sendSimulationStatusUpdate(ctx *SimulationContext) {
 		winRate = float64(profitableTrades) / float64(totalTrades) * 100.0
 	}
 
+	// Calculate average profit per trade
+	avgProfit := 0.0
+	if profitableTrades > 0 {
+		avgProfit = totalProfit / float64(profitableTrades)
+	}
+
+	// Calculate average loss per trade
+	avgLoss := 0.0
+	if losingTrades > 0 {
+		avgLoss = totalLoss / float64(losingTrades)
+	}
+
 	// Send status event
 	s.sendSimulationEvent(ctx, "simulation_status", map[string]interface{}{
 		"total_trades":      totalTrades,
@@ -1598,6 +1647,40 @@ func (s *SimulationService) sendSimulationStatusUpdate(ctx *SimulationContext) {
 		"current_balance":   currentBalance,
 		"initial_balance":   initialBalance,
 	})
+
+	// Save or update current metrics to database for running simulations
+	if s.strategyMetricRepo != nil && totalTrades > 0 {
+		// Calculate max drawdown (simplified version for running simulations)
+		maxDrawdown := 0.0
+		if initialBalance > currentBalance {
+			maxDrawdown = (initialBalance - currentBalance) / initialBalance * 100.0
+		}
+
+		// Create strategy metric object
+		strategyMetric := &models.StrategyMetric{
+			StrategyID:       ctx.StrategyID,
+			SimulationRunID:  &ctx.SimulationRunID,
+			WinRate:          winRate,
+			AvgProfit:        avgProfit,
+			AvgLoss:          avgLoss,
+			MaxDrawdown:      maxDrawdown,
+			TotalTrades:      totalTrades,
+			SuccessfulTrades: profitableTrades,
+			RiskScore:        ctx.Strategy.RiskScore,
+			ROI:              roi,
+			CurrentBalance:   currentBalance,
+			InitialBalance:   initialBalance,
+			CreatedAt:        time.Now(),
+		}
+
+		// Use UpdateLatestByStrategy to update existing metric or create new one
+		err := s.strategyMetricRepo.UpdateLatestByStrategy(strategyMetric)
+		if err != nil {
+			s.logger.Error("Error updating real-time strategy metrics: %v", err)
+		} else {
+			s.logger.Info("Updated real-time strategy metrics for strategy %d", ctx.StrategyID)
+		}
+	}
 
 	s.logger.Info("Sent simulation status update: Balance=%.6f, ROI=%.2f%%, Win Rate=%.2f%%",
 		currentBalance, roi, winRate)

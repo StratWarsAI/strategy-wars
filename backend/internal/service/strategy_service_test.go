@@ -78,6 +78,16 @@ type MockStrategyMetricRepository struct {
 	mock.Mock
 }
 
+// GetLatestByStrategyAndSimulation implements repository.StrategyMetricRepositoryInterface.
+func (m *MockStrategyMetricRepository) GetLatestByStrategyAndSimulation(strategyID int64, simulationRunID *int64) (*models.StrategyMetric, error) {
+	panic("unimplemented")
+}
+
+// UpdateLatestByStrategy implements repository.StrategyMetricRepositoryInterface.
+func (m *MockStrategyMetricRepository) UpdateLatestByStrategy(metric *models.StrategyMetric) error {
+	panic("unimplemented")
+}
+
 func (m *MockStrategyMetricRepository) Save(metric *models.StrategyMetric) (int64, error) {
 	args := m.Called(metric)
 	return args.Get(0).(int64), args.Error(1)

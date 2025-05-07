@@ -274,7 +274,7 @@ func (s *AIService) formatPrompt(basePrompt string, metaData map[string]interfac
 		"entryTimeWindowSec": 300,
 		"takeProfitPct": 50,
 		"stopLossPct": 30,
-		"maxHoldTimeSec": 1800,
+		"maxHoldTimeSec": 60,
 		"fixedPositionSizeSol": 0.5,
 		"initialBalance": 10
 		}`)
@@ -534,9 +534,9 @@ func (s *AIService) calculateRiskScore(config models.JSONB) int {
 		// Lower market cap usually means higher risk
 		if marketCap < 5000 {
 			risk += 2 // Very risky
-		} else if marketCap < 10000 {
+		} else if marketCap < 7000 {
 			risk += 1 // Somewhat risky
-		} else if marketCap > 30000 {
+		} else if marketCap > 15000 {
 			risk -= 1 // Lower risk
 		}
 	}

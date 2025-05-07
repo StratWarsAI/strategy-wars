@@ -25,6 +25,7 @@ export function StrategyModule({strategy1Data, strategy2Data}: StrategyModulePro
     currentBalance: strategy1Balance, 
     currentRoi: strategy1Roi,
     totalTrades: strategy1TotalTrades,
+    winRate: strategy1WinRate,
     performanceData: strategy1Performance = []
   } = useStrategyEvents(strategy1Data?.strategyId);
   
@@ -33,6 +34,7 @@ export function StrategyModule({strategy1Data, strategy2Data}: StrategyModulePro
     currentBalance: strategy2Balance, 
     currentRoi: strategy2Roi,
     totalTrades: strategy2TotalTrades,
+    winRate: strategy2WinRate,
     performanceData: strategy2Performance = []
   } = useStrategyEvents(strategy2Data?.strategyId);
   
@@ -113,14 +115,16 @@ export function StrategyModule({strategy1Data, strategy2Data}: StrategyModulePro
     ...strategy1Data,
     currentBalance: strategy1Balance ?? strategy1Data.currentBalance,
     roi: strategy1Roi ?? strategy1Data.roi,
-    totalTrades: strategy1TotalTrades ?? strategy1Data.totalTrades
+    totalTrades: strategy1TotalTrades ?? strategy1Data.totalTrades,
+    winRate: strategy1WinRate ?? strategy1Data.winRate
   };
   
   const updatedStrategy2 = {
     ...strategy2Data,
     currentBalance: strategy2Balance ?? strategy2Data.currentBalance,
     roi: strategy2Roi ?? strategy2Data.roi,
-    totalTrades: strategy2TotalTrades ?? strategy2Data.totalTrades
+    totalTrades: strategy2TotalTrades ?? strategy2Data.totalTrades,
+    winRate: strategy2WinRate ?? strategy2Data.winRate
   };
   
   // Compare which strategy is currently winning based on latest ROI
