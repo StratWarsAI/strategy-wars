@@ -562,7 +562,7 @@ func (s *AutomationService) processSimulationQueue() {
 				}
 
 				// Wait for a reasonable time for the simulation to complete (e.g., 10 minutes)
-				simulationTimeout := 10 * time.Minute
+				simulationTimeout := 60 * time.Minute
 				simulationDone := make(chan bool)
 
 				go func() {

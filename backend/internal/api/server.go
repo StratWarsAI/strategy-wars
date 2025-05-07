@@ -145,14 +145,21 @@ func NewServer(port int, db *sql.DB, cfg *config.Config, logger *logger.Logger) 
 		performanceAnalyzer: performanceAnalyzer,
 	}
 
+	// Create AI handler
+	aiHandler := handlers.NewAIHandler(
+		aiService,
+		performanceAnalyzer,
+		logger,
+	)
+
 	// Register routes
-	server.registerRoutes()
+	server.registerRoutes(aiHandler)
 
 	return server
 }
 
 // registerRoutes registers all API routes
-func (s *Server) registerRoutes() {
+func (s *Server) registerRoutes(aiHandler *handlers.AIHandler) {
 
 	// Add middleware
 	s.app.Use(s.loggingMiddleware())
@@ -193,6 +200,13 @@ func (s *Server) registerRoutes() {
 		s.simulationHandler.RegisterRoutes(api)
 	} else {
 		s.logger.Warn("Simulation handler is nil, routes not registered")
+	}
+	
+	// Register AI routes
+	if aiHandler != nil {
+		aiHandler.RegisterRoutes(api)
+	} else {
+		s.logger.Warn("AI handler is nil, routes not registered")
 	}
 }
 

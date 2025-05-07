@@ -13,6 +13,7 @@ export interface Strategy {
     aiEnhanced: boolean;
     createdAt?: string;
     updatedAt?: string;
+    metrics?: StrategyMetrics;
 }
 
 export interface StrategyConfig {
@@ -29,7 +30,7 @@ export interface StrategyConfig {
 
 export interface StrategyEvent {
     id: string; // Unique ID for the event
-    type: 'buy' | 'sell' | 'info';
+    type: 'buy' | 'sell' | 'info' | 'analysis';
     token?: {
         id: number;
         symbol: string;
@@ -48,4 +49,20 @@ export interface StrategyEvent {
     timestamp: number;
     message?: string;
     marketCap?: number;
+}
+
+export interface StrategyMetrics {
+    totalTrades: number;
+    winningTrades: number;
+    losingTrades: number;
+    winRate: number;
+    averageProfitPct: number;
+    averageLossPct: number;
+    largestWinPct: number;
+    largestLossPct: number;
+    balance: number;
+    initialBalance: number;
+    roi: number;
+    profitFactor: number;
+    sharpeRatio?: number;
 }

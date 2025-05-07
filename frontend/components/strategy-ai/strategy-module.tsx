@@ -26,7 +26,8 @@ export function StrategyModule({strategy1Data, strategy2Data}: StrategyModulePro
     currentRoi: strategy1Roi,
     totalTrades: strategy1TotalTrades,
     winRate: strategy1WinRate,
-    performanceData: strategy1Performance = []
+    performanceData: strategy1Performance = [],
+    aiAnalysis: aiAnalysis1
   } = useStrategyEvents(strategy1Data?.strategyId);
   
   const { 
@@ -35,7 +36,8 @@ export function StrategyModule({strategy1Data, strategy2Data}: StrategyModulePro
     currentRoi: strategy2Roi,
     totalTrades: strategy2TotalTrades,
     winRate: strategy2WinRate,
-    performanceData: strategy2Performance = []
+    performanceData: strategy2Performance = [],
+    aiAnalysis: aiAnalysis2
   } = useStrategyEvents(strategy2Data?.strategyId);
   
   
@@ -132,7 +134,11 @@ export function StrategyModule({strategy1Data, strategy2Data}: StrategyModulePro
   
   return (
     <div className="space-y-6">
-        <AICommentary strategy1={updatedStrategy1} strategy2={updatedStrategy2} />
+        <AICommentary 
+          strategy1={updatedStrategy1} 
+          strategy2={updatedStrategy2} 
+          aiAnalysis={aiAnalysis1 || aiAnalysis2}
+        />
       
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">

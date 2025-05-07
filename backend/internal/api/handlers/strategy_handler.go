@@ -159,10 +159,35 @@ func (h *StrategyHandler) GetPublicStrategies(c *fiber.Ctx) error {
 	return c.JSON(responseDtos)
 }
 
+// GetTopStrategies handles retrieving top performing strategies
+func (h *StrategyHandler) GetTopStrategies(c *fiber.Ctx) error {
+	// Parse optional query parameters
+	limit := c.QueryInt("limit", 12)
+	criteria := c.Query("criteria", "performance")
+
+	// Fetch top strategies
+	strategies, err := h.service.GetTopStrategies(criteria, limit)
+	if err != nil {
+		h.logger.Error("Error fetching top strategies: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	// Fetch latest metrics for each strategy
+	responseDtos := make([]dto.StrategyResponseDto, len(strategies))
+	for i, strategy := range strategies {
+		responseDtos[i] = dto.NewStrategyResponseDto(strategy)
+	}
+
+	return c.JSON(responseDtos)
+}
+
 func (h *StrategyHandler) RegisterRoutes(app fiber.Router) {
 	route := app.Group("")
 	route.Post("/strategies", h.Create)
+	// Order matters for routes, more specific routes should come first
+	route.Get("/strategies/top", h.GetTopStrategies)
 	route.Get("/strategies/:id", h.GetByID)
 	route.Get("/strategies", h.GetPublicStrategies)
-
 }

@@ -80,6 +80,20 @@ type TradeClosedEvent struct {
 	UsdMarketCap   float64 `json:"usdMarketCap"`
 }
 
+// AIAnalysisEvent represents an AI generated analysis event
+type AIAnalysisEvent struct {
+	BaseEventDTO
+	StrategyName       string  `json:"strategy_name"`
+	Analysis           string  `json:"analysis"`
+	Rating             string  `json:"rating"`
+	ROI                float64 `json:"roi"`
+	WinRate            float64 `json:"win_rate"`
+	TotalTrades        int     `json:"total_trades"`
+	MaxDrawdown        float64 `json:"max_drawdown"`
+	NetPnL             float64 `json:"net_pnl"`
+	AvgTradeProfit     float64 `json:"avg_trade_profit"`
+}
+
 // WebSocketMessage is a generic interface for all WebSocket messages
 type WebSocketMessage interface {
 	GetType() string

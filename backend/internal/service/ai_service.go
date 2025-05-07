@@ -565,6 +565,110 @@ func (s *AIService) SaveStrategy(strategy *models.Strategy) (int64, error) {
 	return s.strategyRepo.Save(strategy)
 }
 
+// GenerateAnalysis generates an AI-powered analysis of a strategy's performance
+func (s *AIService) GenerateAnalysis(strategyName string, metrics map[string]interface{}, hasActiveTrades bool, isActiveSimulation bool) (string, error) {
+	s.logger.Info("Generating AI analysis for strategy: %s", strategyName)
+
+	// Convert metrics to a description format for the AI
+	var metricsDescription strings.Builder
+	metricsDescription.WriteString(fmt.Sprintf("Strategy Name: %s\n", strategyName))
+
+	if totalTrades, ok := metrics["total_trades"].(int); ok {
+		metricsDescription.WriteString(fmt.Sprintf("Total Completed Trades: %d\n", totalTrades))
+	}
+
+	if hasActiveTrades {
+		if activeTrades, ok := metrics["active_trades"].(int); ok {
+			metricsDescription.WriteString(fmt.Sprintf("Active Positions: %d\n", activeTrades))
+		}
+	}
+
+	if winRate, ok := metrics["win_rate"].(float64); ok {
+		metricsDescription.WriteString(fmt.Sprintf("Win Rate: %.2f%%\n", winRate))
+	}
+
+	if roi, ok := metrics["roi"].(float64); ok {
+		metricsDescription.WriteString(fmt.Sprintf("Return on Investment (ROI): %.2f%%\n", roi))
+	}
+
+	if maxDrawdown, ok := metrics["max_drawdown"].(float64); ok {
+		metricsDescription.WriteString(fmt.Sprintf("Maximum Drawdown: %.2f%%\n", maxDrawdown))
+	}
+
+	if netPnL, ok := metrics["net_pnl"].(float64); ok {
+		metricsDescription.WriteString(fmt.Sprintf("Net Profit/Loss: %.4f\n", netPnL))
+	}
+
+	if avgProfit, ok := metrics["avg_profit"].(float64); ok {
+		metricsDescription.WriteString(fmt.Sprintf("Average Profit per Trade: %.4f\n", avgProfit))
+	}
+
+	if avgLoss, ok := metrics["avg_loss"].(float64); ok {
+		metricsDescription.WriteString(fmt.Sprintf("Average Loss per Trade: %.4f\n", avgLoss))
+	}
+
+	// Additional context about the current state
+	if isActiveSimulation {
+		metricsDescription.WriteString("\nThis strategy is currently being simulated. The metrics may change as trades complete.\n")
+	}
+
+	if hasActiveTrades {
+		metricsDescription.WriteString("\nThe strategy has active open positions that are not reflected in the completed trade metrics.\n")
+	}
+
+	// Create the prompt for the AI
+	prompt := fmt.Sprintf(`Analyze the trading performance of a cryptocurrency strategy based on the provided metrics and generate an insightful performance analysis. Your analysis should:
+
+			1. Objectively assess the strategy's performance based on the metrics
+			2. Highlight strengths and weaknesses
+			3. Assess the level of risk based on drawdown and other metrics
+			4. Provide a clear assessment (excellent, good, average, poor, or very poor)
+			5. Suggest potential areas of improvement if applicable
+
+			Here are the performance metrics:
+
+		%s
+
+		Write a concise, clear analysis of approximately 3-5 sentences that a trader would find valuable.`, metricsDescription.String())
+
+	// Create request using the same model and API configuration already set in the AIService
+	req := AIRequest{
+		Model: "gpt-4",
+		Messages: []AIMessage{
+			{
+				Role:    "system",
+				Content: "You are an expert trading strategy analyst specializing in cryptocurrency trading. You provide concise, insightful analysis of trading strategy performance.",
+			},
+			{
+				Role:    "user",
+				Content: prompt,
+			},
+		},
+		Temperature: 0.7,
+		MaxTokens:   500,
+	}
+
+	// Execute request using the existing API configuration
+	response, err := s.executeRequest(req)
+	if err != nil {
+		return "", fmt.Errorf("error executing analysis generation request: %v", err)
+	}
+
+	// Check for valid response
+	if len(response.Choices) == 0 {
+		return "", fmt.Errorf("no analysis content in AI response")
+	}
+
+	analysis := response.Choices[0].Message.Content
+
+	// Clean the analysis text (remove quotes, etc. if needed)
+	analysis = strings.TrimSpace(analysis)
+
+	s.logger.Info("Generated AI analysis for strategy %s successfully", strategyName)
+
+	return analysis, nil
+}
+
 // GenerateEvolutionaryStrategy creates a new strategy based on existing successful ones
 func (s *AIService) GenerateEvolutionaryStrategy() (*models.Strategy, error) {
 	// Get top strategies to base the new one on

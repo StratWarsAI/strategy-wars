@@ -154,8 +154,37 @@ func (a *AIPerformanceAnalyzer) RunAnalysisCycle() error {
 		}
 		reports = append(reports, report)
 
+		// Create WebSocket event for real-time updates
+		wsEvent := struct {
+			Type              string  `json:"type"`
+			StrategyID        int64   `json:"strategy_id"`
+			StrategyName      string  `json:"strategy_name"`
+			Timestamp         int64   `json:"timestamp"`
+			Analysis          string  `json:"analysis"`
+			Rating            string  `json:"rating"`
+			ROI               float64 `json:"roi"`
+			WinRate           float64 `json:"win_rate"`
+			TotalTrades       int     `json:"total_trades"`
+			MaxDrawdown       float64 `json:"max_drawdown"`
+			NetPnL            float64 `json:"net_pnl"`
+			AvgTradeProfit    float64 `json:"avg_trade_profit"`
+		}{
+			Type:           "ai_analysis",
+			StrategyID:     report.StrategyID,
+			StrategyName:   report.StrategyName,
+			Timestamp:      report.GeneratedAt.Unix(),
+			Analysis:       report.Analysis,
+			Rating:         report.Rating,
+			ROI:            report.ROI,
+			WinRate:        report.WinRate,
+			TotalTrades:    report.TotalTrades,
+			MaxDrawdown:    report.MaxDrawdown,
+			NetPnL:         report.NetPnL,
+			AvgTradeProfit: report.AvgTradeProfit,
+		}
+
 		// Save the analysis report to the database
-		if err := a.saveAnalysisReport(report); err != nil {
+		if err := a.SaveAnalysisReport(report, wsEvent); err != nil {
 			a.logger.Error("Error saving analysis report for strategy %d: %v", strategy.ID, err)
 		}
 	}
@@ -172,7 +201,8 @@ func (a *AIPerformanceAnalyzer) RunAnalysisCycle() error {
 }
 
 // saveAnalysisReport saves an analysis report to the database
-func (a *AIPerformanceAnalyzer) saveAnalysisReport(report *PerformanceReport) error {
+// If webSocketEvent is provided, it will also be broadcast via WebSocket
+func (a *AIPerformanceAnalyzer) SaveAnalysisReport(report *PerformanceReport, webSocketEvent interface{}) error {
 	// Get the current active simulation run
 	currentRun, err := a.simulationRunRepo.GetCurrent()
 	if err != nil {
@@ -240,6 +270,12 @@ func (a *AIPerformanceAnalyzer) saveAnalysisReport(report *PerformanceReport) er
 
 	a.logger.Info("Saved analysis report for strategy %d (%s) with rating %s",
 		report.StrategyID, report.StrategyName, report.Rating)
+
+	// If WebSocket event is provided, broadcast it
+	if webSocketEvent != nil && a.simulationService != nil && a.simulationService.GetWSHub() != nil {
+		a.simulationService.GetWSHub().BroadcastJSON(webSocketEvent)
+		a.logger.Info("Broadcasted AI analysis event via WebSocket for strategy %d", report.StrategyID)
+	}
 
 	return nil
 }
@@ -359,9 +395,6 @@ func (a *AIPerformanceAnalyzer) generatePerformanceAnalysis(
 	strategy *models.Strategy,
 	latestMetric *models.StrategyMetric,
 ) string {
-	// Start with a basic analysis
-	analysis := fmt.Sprintf("Strategy '%s' ", strategy.Name)
-
 	// Check if there are any active trades for this strategy
 	activeTrades, err := a.simulatedTradeRepo.GetActiveByStrategyID(strategy.ID)
 	hasActiveTrades := err == nil && len(activeTrades) > 0
@@ -398,73 +431,88 @@ func (a *AIPerformanceAnalyzer) generatePerformanceAnalysis(
 		completedTradesCount = totalTrades
 	}
 
-	// No trades at all
+	// If we have no trades at all, return a simple message
 	if totalTradesCount == 0 {
 		if isThisStrategyActive {
-			return analysis + "is currently running but has no positions yet."
+			return fmt.Sprintf("Strategy '%s' is currently running but has no positions yet.", strategy.Name)
 		} else {
-			return analysis + "has not executed any trades yet, so performance cannot be evaluated."
+			return fmt.Sprintf("Strategy '%s' has not executed any trades yet, so performance cannot be evaluated.", strategy.Name)
 		}
 	}
 
-	// Strategy has trades (active, completed, or both)
+	// Update the metrics to include active trade count
 	if hasActiveTrades {
-		analysis += fmt.Sprintf("has %d active positions", len(activeTrades))
+		report.Metrics["active_trades"] = len(activeTrades)
+	}
+
+	// Use AI service to generate the analysis
+	analysis, err := a.aiService.GenerateAnalysis(
+		strategy.Name,
+		report.Metrics,
+		hasActiveTrades,
+		isThisStrategyActive,
+	)
+
+	// If AI analysis fails, fall back to a simple template-based analysis
+	if err != nil {
+		a.logger.Error("Failed to generate AI analysis for strategy %d: %v. Using fallback analysis.", strategy.ID, err)
+		
+		// Start with a basic analysis
+		analysis := fmt.Sprintf("Strategy '%s' ", strategy.Name)
+
+		// Strategy has trades (active, completed, or both)
+		if hasActiveTrades {
+			analysis += fmt.Sprintf("has %d active positions", len(activeTrades))
+			if completedTradesCount > 0 {
+				analysis += fmt.Sprintf(" and %d completed trades. ", completedTradesCount)
+			} else {
+				analysis += ". "
+			}
+		} else if completedTradesCount > 0 {
+			analysis += fmt.Sprintf("has completed %d trades. ", completedTradesCount)
+		}
+
+		// Add performance metrics
 		if completedTradesCount > 0 {
-			analysis += fmt.Sprintf(" and %d completed trades. ", completedTradesCount)
-		} else {
-			analysis += ". "
-		}
-	} else if completedTradesCount > 0 {
-		analysis += fmt.Sprintf("has completed %d trades. ", completedTradesCount)
-	}
+			// Add ROI information
+			if report.ROI > 0 {
+				analysis += fmt.Sprintf("It has performed positively with an ROI of %.2f%%. ", report.ROI)
+			} else {
+				analysis += fmt.Sprintf("It has performed negatively with an ROI of %.2f%%. ", report.ROI)
+			}
 
-	// Add performance metrics
-	if completedTradesCount > 0 {
-		// Add ROI information
-		if report.ROI > 0 {
-			analysis += fmt.Sprintf("It has performed positively with an ROI of %.2f%%. ", report.ROI)
-		} else {
-			analysis += fmt.Sprintf("It has performed negatively with an ROI of %.2f%%. ", report.ROI)
+			// Add win rate details
+			analysis += fmt.Sprintf("The strategy won %.2f%% of its completed trades. ", report.WinRate)
+		} else if hasActiveTrades {
+			// Only has active trades, no completed ones
+			analysis += "Since all positions are still active, final performance metrics cannot be calculated yet. "
 		}
 
-		// Add win rate details
-		analysis += fmt.Sprintf("The strategy won %.2f%% of its completed trades. ", report.WinRate)
-	} else if hasActiveTrades {
-		// Only has active trades, no completed ones
-		analysis += "Since all positions are still active, final performance metrics cannot be calculated yet. "
-	}
-
-	// Add active simulation disclaimer if this strategy is currently running
-	if isThisStrategyActive {
-		analysis += "This strategy is currently being simulated. Metrics may change as trades complete. "
-	}
-
-	// Add drawdown analysis
-	if report.MaxDrawdown > 0 {
-		analysis += fmt.Sprintf("Maximum drawdown was %.2f%%. ", report.MaxDrawdown)
-
-		if report.MaxDrawdown > 50 {
-			analysis += "This indicates high volatility and risk. "
-		} else if report.MaxDrawdown > 25 {
-			analysis += "This indicates moderate volatility and risk. "
+		// Add active simulation disclaimer if this strategy is currently running
+		if isThisStrategyActive {
+			analysis += "This strategy is currently being simulated. Metrics may change as trades complete. "
 		}
+
+		// Recommendation based on performance
+		switch report.Rating {
+		case "excellent":
+			analysis += "This strategy is performing exceptionally well and should be maintained."
+		case "good":
+			analysis += "This strategy is performing well and should be considered for further optimization."
+		case "average":
+			analysis += "This strategy is performing adequately but could benefit from optimization."
+		case "poor":
+			analysis += "This strategy is underperforming and should be reviewed for potential improvements."
+		case "very_poor":
+			analysis += "This strategy is performing poorly and should be reconsidered or replaced."
+		}
+		
+		return analysis
 	}
 
-	// Recommendation based on performance
-	switch report.Rating {
-	case "excellent":
-		analysis += "This strategy is performing exceptionally well and should be maintained."
-	case "good":
-		analysis += "This strategy is performing well and should be considered for further optimization."
-	case "average":
-		analysis += "This strategy is performing adequately but could benefit from optimization."
-	case "poor":
-		analysis += "This strategy is underperforming and should be reviewed for potential improvements."
-	case "very_poor":
-		analysis += "This strategy is performing poorly and should be reconsidered or replaced."
-	}
-
+	// Log successful AI analysis
+	a.logger.Info("Generated AI analysis for strategy %d successfully", strategy.ID)
+	
 	return analysis
 }
 

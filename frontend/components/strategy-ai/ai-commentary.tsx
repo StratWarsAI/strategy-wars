@@ -7,13 +7,15 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { SimulationSummary } from '@/types';
+import { AIAnalysisEvent } from '@/types/websocket.type';
 
 interface AICommentaryProps {
   strategy1?: SimulationSummary;
   strategy2?: SimulationSummary;
+  aiAnalysis?: AIAnalysisEvent | null;
 }
 
-export function AICommentary({ strategy1, strategy2 }: AICommentaryProps) {
+export function AICommentary({ strategy1, strategy2, aiAnalysis }: AICommentaryProps) {
   const [generatedStrategies, setGeneratedStrategies] = useState(() => {
     return [
       {
@@ -112,7 +114,7 @@ export function AICommentary({ strategy1, strategy2 }: AICommentaryProps) {
     return () => clearInterval(interval);
   }, []);
 
-  // NEW EFFECT: Update the state when strategies change
+  // Update the state when strategies change or aiAnalysis is received
   useEffect(() => {
     if (strategy1 && strategy2) {
       // Update generated strategies
@@ -161,41 +163,86 @@ export function AICommentary({ strategy1, strategy2 }: AICommentaryProps) {
         }
       ]);
       
-      // Generate new commentary
-      const s1Id = strategy1.strategyId;
-      const s2Id = strategy2.strategyId;
-      const s1Roi = strategy1.roi;
-      const s2Roi = strategy2.roi;
-      const roiDiff = Math.abs(s1Roi - s2Roi).toFixed(1);
-      const s1WinRate = strategy1.winRate;
-      const s2WinRate = strategy2.winRate;
-      const betterRoi = s1Roi > s2Roi ? s1Id : s2Id;
-      const betterWinRate = s1WinRate > s2WinRate ? s1Id : s2Id;
-      
-      let analysisText = '';
-      if (betterRoi === betterWinRate) {
-        analysisText = `Strategy #${betterRoi} is outperforming in both ROI (${betterRoi === s1Id ? s1Roi : s2Roi}% vs ${betterRoi === s1Id ? s2Roi : s1Roi}%) and win rate.`;
-      } else {
-        analysisText = `Strategy #${betterRoi} has better ROI (${betterRoi === s1Id ? s1Roi : s2Roi}%), while Strategy #${betterWinRate} has better win rate (${betterWinRate === s1Id ? s1WinRate : s2WinRate}%).`;
+      // Generate new commentary based on strategies if we don't have AI analysis
+      if (!aiAnalysis) {
+        const s1Id = strategy1.strategyId;
+        const s2Id = strategy2.strategyId;
+        const s1Roi = strategy1.roi;
+        const s2Roi = strategy2.roi;
+        const roiDiff = Math.abs(s1Roi - s2Roi).toFixed(1);
+        const s1WinRate = strategy1.winRate;
+        const s2WinRate = strategy2.winRate;
+        const betterRoi = s1Roi > s2Roi ? s1Id : s2Id;
+        const betterWinRate = s1WinRate > s2WinRate ? s1Id : s2Id;
+        
+        let analysisText = '';
+        if (betterRoi === betterWinRate) {
+          analysisText = `Strategy #${betterRoi} is outperforming in both ROI (${betterRoi === s1Id ? s1Roi : s2Roi}% vs ${betterRoi === s1Id ? s2Roi : s1Roi}%) and win rate.`;
+        } else {
+          analysisText = `Strategy #${betterRoi} has better ROI (${betterRoi === s1Id ? s1Roi : s2Roi}%), while Strategy #${betterWinRate} has better win rate (${betterWinRate === s1Id ? s1WinRate : s2WinRate}%).`;
+        }
+        
+        if (strategy1.totalTrades > strategy2.totalTrades * 3) {
+          analysisText += ` Strategy #${s1Id} is much more active with ${strategy1.totalTrades} trades vs only ${strategy2.totalTrades} trades.`;
+        } else if (strategy2.totalTrades > strategy1.totalTrades * 3) {
+          analysisText += ` Strategy #${s2Id} is much more active with ${strategy2.totalTrades} trades vs only ${strategy1.totalTrades} trades.`;
+        }
+        
+        // Update the commentary with current timestamp
+        setCurrentCommentary({
+          id: Date.now(),
+          timestamp: Date.now(),
+          title: "Updated Analysis",
+          comment: analysisText
+        });
       }
-      
-      if (strategy1.totalTrades > strategy2.totalTrades * 3) {
-        analysisText += ` Strategy #${s1Id} is much more active with ${strategy1.totalTrades} trades vs only ${strategy2.totalTrades} trades.`;
-      } else if (strategy2.totalTrades > strategy1.totalTrades * 3) {
-        analysisText += ` Strategy #${s2Id} is much more active with ${strategy2.totalTrades} trades vs only ${strategy1.totalTrades} trades.`;
-      }
-      
-      // Update the commentary with current timestamp
-      setCurrentCommentary({
-        id: Date.now(),
-        timestamp: Date.now(),
-        title: "Updated Analysis",
-        comment: analysisText
-      });
       
       setNextUpdate(600);
     }
   }, [strategy1, strategy2]); // Run effect when strategy data changes
+  
+  // Effect for AI analysis updates
+  useEffect(() => {
+    if (aiAnalysis) {
+      console.log("Received AI analysis:", aiAnalysis);
+      
+      setCurrentCommentary({
+        id: aiAnalysis.timestamp,
+        timestamp: aiAnalysis.timestamp * 1000, // Convert from Unix timestamp
+        title: "AI Strategy Analysis",
+        comment: aiAnalysis.analysis
+      });
+      
+      // If the analysis is for the currently displayed strategy, update that strategy
+      if (strategy1 && aiAnalysis.strategy_id === strategy1.strategyId) {
+        setGeneratedStrategies(prev => {
+          const updated = [...prev];
+          if (updated[0]) {
+            updated[0].performance = {
+              ...updated[0].performance,
+              roi: aiAnalysis.roi, // Changed from aiAnalysis.performance_metrics.roi
+              winRate: aiAnalysis.win_rate // Changed from aiAnalysis.performance_metrics.win_rate
+            };
+          }
+          return updated;
+        });
+      } else if (strategy2 && aiAnalysis.strategy_id === strategy2.strategyId) {
+        setGeneratedStrategies(prev => {
+          const updated = [...prev];
+          if (updated[1]) {
+            updated[1].performance = {
+              ...updated[1].performance,
+              roi: aiAnalysis.roi, // Changed from aiAnalysis.performance_metrics.roi
+              winRate: aiAnalysis.win_rate // Changed from aiAnalysis.performance_metrics.win_rate
+            };
+          }
+          return updated;
+        });
+      }
+      
+      setNextUpdate(600);
+    }
+  }, [aiAnalysis, strategy1, strategy2]);
 
   // Format time
   const formatTime = (timestamp: number) => {
@@ -260,7 +307,6 @@ export function AICommentary({ strategy1, strategy2 }: AICommentaryProps) {
               <span className="hidden sm:inline">Auto-updating</span>
               <span className="inline sm:hidden">Auto</span>
             </Badge>
-            <Badge variant="secondary" className="text-xs">Next: {formatRemainingTime(nextUpdate)}</Badge>
           </div>
         </div>
       </CardHeader>

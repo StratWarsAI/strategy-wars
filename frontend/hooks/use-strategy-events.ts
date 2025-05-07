@@ -7,7 +7,8 @@ import {
   TradeClosedEvent, 
   SimulationStatusEvent,
   SimulationStartedEvent,
-  SimulationCompletedEvent
+  SimulationCompletedEvent,
+  AIAnalysisEvent
 } from '@/types/websocket.type';
 import { useWebSocket } from '@/lib/context/web-socket-context';
 import { StrategyEvent } from '@/types';
@@ -36,6 +37,7 @@ export function useStrategyEvents(strategyId: number | null) {
   
   // Performance tracking
   const [performanceData, setPerformanceData] = useState<PerformanceDataPoint[]>([]);
+  const [aiAnalysis, setAiAnalysis] = useState<AIAnalysisEvent | null>(null);
   
   // Subscribe to a strategy when component mounts
   useEffect(() => {
@@ -51,6 +53,7 @@ export function useStrategyEvents(strategyId: number | null) {
     setActiveTrades(null);
     setWinRate(null);
     setPerformanceData([]);
+    setAiAnalysis(null);
     
     // Add initial data point with 0 ROI
     if (strategyId) {
@@ -171,6 +174,18 @@ export function useStrategyEvents(strategyId: number | null) {
           message: `Simulation completed. Evaluated tokens in ${completeEvent.executionTimeSec.toFixed(1)}s`,
         });
         break;
+        
+      case 'ai_analysis':
+        const analysisEvent = message as AIAnalysisEvent;
+        console.log("Received AI Analysis event:", analysisEvent);
+        setAiAnalysis(analysisEvent);
+        addEvent({
+          id: `analysis-${analysisEvent.timestamp}`,
+          type: 'analysis',
+          timestamp: analysisEvent.timestamp,
+          message: `AI Analysis: ${analysisEvent.analysis.substring(0, 100)}...`,
+        });
+        break;
 
       case 'trade_executed':
         const tradeEvent = message as TradeExecutedEvent;
@@ -241,6 +256,7 @@ export function useStrategyEvents(strategyId: number | null) {
     totalTrades,
     activeTrades,
     winRate,
-    performanceData 
+    performanceData,
+    aiAnalysis
   };
 }

@@ -91,3 +91,18 @@ export interface SimulationBalanceDepletedEvent extends WebSocketMessage {
     remainingBalance: number;
     positionSize: number;
   }
+
+export interface AIAnalysisEvent extends WebSocketMessage {
+    type: 'ai_analysis';
+    strategy_id: number;
+    strategy_name: string;
+    timestamp: number;
+    analysis: string;
+    rating: string;
+    roi: number;
+    win_rate: number;
+    total_trades: number;
+    max_drawdown: number;
+    net_pnl: number;
+    avg_trade_profit: number;
+  }

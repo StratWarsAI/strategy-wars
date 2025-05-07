@@ -1,10 +1,10 @@
-
 import { SimulationSummary } from "@/types";
+import { Strategy } from "@/types/strategy.type";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8080/ws';
 
-interface Strategy {
+interface StrategyRaw {
   id: number;
   name: string;
   description: string;
@@ -14,8 +14,6 @@ interface Strategy {
   created_at: string;
   updated_at: string;
 }
-
-
 
 /**
  * Fetch all public strategies
@@ -151,4 +149,22 @@ export async function getRunningStrategies(): Promise<SimulationSummary[]> {
   }
   
   return response.json();
+}
+
+/**
+ * Fetch top performing strategies
+ */
+export async function fetchTopStrategies(): Promise<Strategy[]> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/strategies/top`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch top strategies: ${response.statusText}`);
+    }
+    
+    return response.json();
+  } catch (error) {
+    console.error("Error fetching top strategies:", error);
+    throw error;
+  }
 }

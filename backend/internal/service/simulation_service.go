@@ -21,21 +21,22 @@ import (
 
 // SimulationService handles strategy simulations
 type SimulationService struct {
-	db                  *sql.DB
-	strategyRepo        repository.StrategyRepositoryInterface
-	tokenRepo           repository.TokenRepositoryInterface
-	tradeRepo           repository.TradeRepositoryInterface
-	simulatedTradeRepo  repository.SimulatedTradeRepositoryInterface
-	strategyMetricRepo  repository.StrategyMetricRepositoryInterface
-	simulationRunRepo   repository.SimulationRunRepositoryInterface
-	simulationEventRepo repository.SimulationEventRepositoryInterface
-	logger              *logger.Logger
-	wsHub               *websocket.WSHub
-	activeSimsMu        sync.RWMutex
-	activeSims          map[int64]*SimulationContext
-	simulationDone      chan int64
-	workerPool          chan struct{} // Limit concurrent token evaluations
-	shutdownCh          chan struct{} // Channel for graceful shutdown
+	db                   *sql.DB
+	strategyRepo         repository.StrategyRepositoryInterface
+	tokenRepo            repository.TokenRepositoryInterface
+	tradeRepo            repository.TradeRepositoryInterface
+	simulatedTradeRepo   repository.SimulatedTradeRepositoryInterface
+	strategyMetricRepo   repository.StrategyMetricRepositoryInterface
+	simulationRunRepo    repository.SimulationRunRepositoryInterface
+	simulationEventRepo  repository.SimulationEventRepositoryInterface
+	simulationResultRepo repository.SimulationResultRepositoryInterface
+	logger               *logger.Logger
+	wsHub                *websocket.WSHub
+	activeSimsMu         sync.RWMutex
+	activeSims           map[int64]*SimulationContext
+	simulationDone       chan int64
+	workerPool           chan struct{} // Limit concurrent token evaluations
+	shutdownCh           chan struct{} // Channel for graceful shutdown
 }
 
 // SimulationContext holds the context for an active simulation
@@ -85,21 +86,29 @@ func NewSimulationService(
 		logger.Info("Successfully created simulation event repository")
 	}
 
+	simulationResultRepo := repository.NewSimulationResultRepository(db)
+	if simulationResultRepo == nil {
+		logger.Error("Failed to create simulation result repository")
+	} else {
+		logger.Info("Successfully created simulation result repository")
+	}
+
 	service := &SimulationService{
-		db:                  db,
-		strategyRepo:        strategyRepo,
-		tokenRepo:           tokenRepo,
-		tradeRepo:           tradeRepo,
-		simulatedTradeRepo:  simulatedTradeRepo,
-		strategyMetricRepo:  strategyMetricRepo,
-		simulationRunRepo:   simulationRunRepo,
-		simulationEventRepo: simulationEventRepo,
-		logger:              logger,
-		wsHub:               wsHub,
-		activeSims:          make(map[int64]*SimulationContext),
-		simulationDone:      make(chan int64, 10),
-		workerPool:          make(chan struct{}, maxConcurrentWorkers), // Worker pool for limiting goroutines
-		shutdownCh:          make(chan struct{}),
+		db:                   db,
+		strategyRepo:         strategyRepo,
+		tokenRepo:            tokenRepo,
+		tradeRepo:            tradeRepo,
+		simulatedTradeRepo:   simulatedTradeRepo,
+		strategyMetricRepo:   strategyMetricRepo,
+		simulationRunRepo:    simulationRunRepo,
+		simulationEventRepo:  simulationEventRepo,
+		simulationResultRepo: simulationResultRepo,
+		logger:               logger,
+		wsHub:                wsHub,
+		activeSims:           make(map[int64]*SimulationContext),
+		simulationDone:       make(chan int64, 10),
+		workerPool:           make(chan struct{}, maxConcurrentWorkers), // Worker pool for limiting goroutines
+		shutdownCh:           make(chan struct{}),
 	}
 
 	// Reset any simulations that were left in "running" state
@@ -1397,6 +1406,113 @@ func (s *SimulationService) calculateConsistentPrice(tokenID int64) (float64, er
 	return s.calculatePriceWithRefresh(tokenID)
 }
 
+// calculatePerformanceRating calculates a performance rating based on ROI and win rate
+func (s *SimulationService) calculatePerformanceRating(roi float64, winRate float64) string {
+	// Performance rating thresholds
+	if roi >= 30 && winRate >= 70 {
+		return "excellent"
+	} else if roi >= 15 && winRate >= 60 {
+		return "good"
+	} else if roi >= 5 && winRate >= 50 {
+		return "average"
+	} else if roi > 0 {
+		return "poor"
+	} else {
+		return "very_poor"
+	}
+}
+
+// saveSimulationResult saves a simulation result record based on the metrics
+func (s *SimulationService) saveSimulationResult(strategyMetric *models.StrategyMetric, simulationRunID int64, strategyID int64) (int64, error) {
+	// Calculate performance rating based on metrics
+	performanceRating := s.calculatePerformanceRating(strategyMetric.ROI, strategyMetric.WinRate)
+
+	roi := strategyMetric.ROI
+
+	winRate := strategyMetric.WinRate
+
+	maxDrawdown := strategyMetric.MaxDrawdown
+
+	// Create simulation result model
+	simulationResult := &models.SimulationResult{
+		SimulationRunID:   simulationRunID,
+		StrategyID:        strategyID,
+		ROI:               roi,
+		TradeCount:        strategyMetric.TotalTrades,
+		WinRate:           winRate,
+		MaxDrawdown:       maxDrawdown,
+		PerformanceRating: performanceRating,
+		Analysis:          "", // Can be filled later with AI analysis
+		Rank:              0,  // Will be updated later based on comparison with other strategies
+		CreatedAt:         time.Now(),
+	}
+
+	// Save the simulation result
+	resultID, err := s.simulationResultRepo.Save(simulationResult)
+	if err != nil {
+		return 0, fmt.Errorf("error saving simulation result: %v", err)
+	}
+
+	s.logger.Info("Saved simulation result with ID %d for strategy %d with rating %s",
+		resultID, strategyID, performanceRating)
+
+	// Update the ranks for this simulation run
+	if err := s.updateRanksForSimulationRun(simulationRunID); err != nil {
+		s.logger.Error("Error updating ranks for simulation run %d: %v", simulationRunID, err)
+		// Continue without error since this is supplementary info
+	}
+
+	return resultID, nil
+}
+
+// updateRanksForSimulationRun updates the ranks of all results for a given simulation run
+// based on their ROI performance
+func (s *SimulationService) updateRanksForSimulationRun(simulationRunID int64) error {
+	// Get all results for this simulation run
+	results, err := s.simulationResultRepo.GetBySimulationRun(simulationRunID)
+	if err != nil {
+		return fmt.Errorf("error getting results for simulation run %d: %v", simulationRunID, err)
+	}
+
+	if len(results) == 0 {
+		return nil // Nothing to rank
+	}
+
+	// Sort results by ROI in descending order (highest ROI first)
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].ROI > results[j].ROI
+	})
+
+	// Update ranks in database using a transaction
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("error starting transaction for rank updates: %v", err)
+	}
+
+	// Define SQL query for updating ranks
+	query := `UPDATE simulation_results SET rank = $1 WHERE id = $2`
+
+	// Update ranks for all results
+	for i, result := range results {
+		rank := i + 1 // Ranks start at 1
+
+		// Update the rank for this result
+		_, err := tx.Exec(query, rank, result.ID)
+		if err != nil {
+			tx.Rollback()
+			return fmt.Errorf("error updating rank for result %d: %v", result.ID, err)
+		}
+	}
+
+	// Commit the transaction
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("error committing rank updates: %v", err)
+	}
+
+	s.logger.Info("Updated ranks for %d results in simulation run %d", len(results), simulationRunID)
+	return nil
+}
+
 // saveSimulationMetrics saves the performance metrics for a completed simulation
 func (s *SimulationService) saveSimulationMetrics(ctx *SimulationContext) error {
 	// Calculate metrics
@@ -1427,6 +1543,13 @@ func (s *SimulationService) saveSimulationMetrics(ctx *SimulationContext) error 
 	}
 
 	s.logger.Info("Saved final strategy metrics with ID %d for strategy %d", metricID, ctx.StrategyID)
+
+	// Save corresponding simulation result
+	_, err = s.saveSimulationResult(strategyMetric, ctx.SimulationRunID, ctx.StrategyID)
+	if err != nil {
+		s.logger.Error("Error saving simulation result: %v", err)
+		// Continue execution - the metrics were saved successfully
+	}
 
 	// If this is a winning strategy and ROI is positive, update the simulation run with this strategy as winner
 	roi := metrics["roi"].(float64)
@@ -1625,16 +1748,16 @@ func (s *SimulationService) sendSimulationStatusUpdate(ctx *SimulationContext) {
 	}
 
 	// Calculate average profit per trade
-	avgProfit := 0.0
-	if profitableTrades > 0 {
-		avgProfit = totalProfit / float64(profitableTrades)
-	}
+	//avgProfit := 0.0
+	//if profitableTrades > 0 {
+	//	avgProfit = totalProfit / float64(profitableTrades)
+	//}
 
 	// Calculate average loss per trade
-	avgLoss := 0.0
-	if losingTrades > 0 {
-		avgLoss = totalLoss / float64(losingTrades)
-	}
+	// avgLoss := 0.0
+	// if losingTrades > 0 {
+	// 	avgLoss = totalLoss / float64(losingTrades)
+	// }
 
 	// Send status event
 	s.sendSimulationEvent(ctx, "simulation_status", map[string]interface{}{
@@ -1649,39 +1772,70 @@ func (s *SimulationService) sendSimulationStatusUpdate(ctx *SimulationContext) {
 	})
 
 	// Save or update current metrics to database for running simulations
-	if s.strategyMetricRepo != nil && totalTrades > 0 {
-		// Calculate max drawdown (simplified version for running simulations)
-		maxDrawdown := 0.0
-		if initialBalance > currentBalance {
-			maxDrawdown = (initialBalance - currentBalance) / initialBalance * 100.0
-		}
+	// if s.strategyMetricRepo != nil && totalTrades > 0 {
+	// 	// Calculate max drawdown (simplified version for running simulations)
+	// 	maxDrawdown := 0.0
+	// 	if initialBalance > currentBalance {
+	// 		maxDrawdown = (initialBalance - currentBalance) / initialBalance * 100.0
+	// 	}
 
-		// Create strategy metric object
-		strategyMetric := &models.StrategyMetric{
-			StrategyID:       ctx.StrategyID,
-			SimulationRunID:  &ctx.SimulationRunID,
-			WinRate:          winRate,
-			AvgProfit:        avgProfit,
-			AvgLoss:          avgLoss,
-			MaxDrawdown:      maxDrawdown,
-			TotalTrades:      totalTrades,
-			SuccessfulTrades: profitableTrades,
-			RiskScore:        ctx.Strategy.RiskScore,
-			ROI:              roi,
-			CurrentBalance:   currentBalance,
-			InitialBalance:   initialBalance,
-			CreatedAt:        time.Now(),
-		}
+	// 	// Create strategy metric object
+	// 	strategyMetric := &models.StrategyMetric{
+	// 		StrategyID:       ctx.StrategyID,
+	// 		SimulationRunID:  &ctx.SimulationRunID,
+	// 		WinRate:          winRate,
+	// 		AvgProfit:        avgProfit,
+	// 		AvgLoss:          avgLoss,
+	// 		MaxDrawdown:      maxDrawdown,
+	// 		TotalTrades:      totalTrades,
+	// 		SuccessfulTrades: profitableTrades,
+	// 		RiskScore:        ctx.Strategy.RiskScore,
+	// 		ROI:              roi,
+	// 		CurrentBalance:   currentBalance,
+	// 		InitialBalance:   initialBalance,
+	// 		CreatedAt:        time.Now(),
+	// 	}
 
-		// Use UpdateLatestByStrategy to update existing metric or create new one
-		err := s.strategyMetricRepo.UpdateLatestByStrategy(strategyMetric)
-		if err != nil {
-			s.logger.Error("Error updating real-time strategy metrics: %v", err)
-		} else {
-			s.logger.Info("Updated real-time strategy metrics for strategy %d", ctx.StrategyID)
-		}
-	}
+	// 	// Use UpdateLatestByStrategy to update existing metric or create new one
+	// 	err := s.strategyMetricRepo.UpdateLatestByStrategy(strategyMetric)
+	// 	if err != nil {
+	// 		s.logger.Error("Error updating real-time strategy metrics: %v", err)
+	// 	} else {
+	// 		s.logger.Info("Updated real-time strategy metrics for strategy %d", ctx.StrategyID)
+
+	// 		// Also save a simulation result for periodic analysis
+	// 		// First check if we already have a simulation result for this strategy and run
+	// 		existingResults, err := s.simulationResultRepo.GetBySimulationRun(ctx.SimulationRunID)
+	// 		if err != nil {
+	// 			s.logger.Error("Error checking for existing simulation results: %v", err)
+	// 		} else {
+	// 			strategyHasResult := false
+	// 			for _, result := range existingResults {
+	// 				if result.StrategyID == ctx.StrategyID {
+	// 					strategyHasResult = true
+	// 					break
+	// 				}
+	// 			}
+
+	// 			// If no existing result, or we have enough trades for meaningful results, create/update one
+	// 			if !strategyHasResult && totalTrades > 5 {
+	// 				// Create a simulation result using current metrics
+	// 				_, err := s.saveSimulationResult(strategyMetric, ctx.SimulationRunID, ctx.StrategyID)
+	// 				if err != nil {
+	// 					s.logger.Error("Error saving periodic simulation result: %v", err)
+	// 				} else {
+	// 					s.logger.Info("Saved periodic simulation result for strategy %d during active simulation", ctx.StrategyID)
+	// 				}
+	// 			}
+	// 		}
+	// 	}
+	// }
 
 	s.logger.Info("Sent simulation status update: Balance=%.6f, ROI=%.2f%%, Win Rate=%.2f%%",
 		currentBalance, roi, winRate)
+}
+
+// GetWSHub returns the WebSocket hub
+func (s *SimulationService) GetWSHub() *websocket.WSHub {
+	return s.wsHub
 }

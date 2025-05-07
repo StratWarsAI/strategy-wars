@@ -109,8 +109,8 @@ CREATE TABLE IF NOT EXISTS simulation_results (
     strategy_id INTEGER REFERENCES strategies(id),
     roi DECIMAL(10, 4),
     trade_count INTEGER,
-    win_rate DECIMAL(5, 4),
-    max_drawdown DECIMAL(10, 4),
+    win_rate DECIMAL(5, 2),
+    max_drawdown DECIMAL(10, 2),
     performance_rating TEXT, -- 'excellent', 'good', 'average', 'poor', 'very_poor'
     analysis TEXT,
     rank INTEGER,
