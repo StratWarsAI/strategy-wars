@@ -107,6 +107,31 @@ func (s *AutomationService) Start() error {
 			}
 		} else {
 			s.logger.Info("No running simulations found at startup")
+			
+			// Automatically run simulations for existing strategies on startup
+			s.logger.Info("Starting automatic simulation of existing strategies...")
+			go func() {
+				// Get all AI strategies that haven't been simulated recently
+				strategies, err := s.getAllAIStrategies()
+				if err != nil {
+					s.logger.Error("Error getting AI strategies at startup: %v", err)
+					return
+				}
+				
+				// Only take MaxConcurrentSimulations strategies to avoid overloading
+				count := 0
+				for _, strategy := range strategies {
+					if count >= s.config.MaxConcurrentSimulations {
+						break
+					}
+					
+					s.logger.Info("Queuing existing strategy ID=%d for automatic simulation at startup", strategy.ID)
+					s.queueStrategyForSimulation(strategy.ID)
+					count++
+				}
+				
+				s.logger.Info("Queued %d existing strategies for simulation at startup", count)
+			}()
 		}
 	}
 	

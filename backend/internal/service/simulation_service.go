@@ -1414,7 +1414,6 @@ func (s *SimulationService) saveSimulationMetrics(ctx *SimulationContext) error 
 func (s *SimulationService) GetRunningSimulations() []*dto.SimulationStatusDTO {
 	s.activeSimsMu.RLock()
 	defer s.activeSimsMu.RUnlock()
-
 	runningSimulations := make([]*dto.SimulationStatusDTO, 0, len(s.activeSims))
 
 	for strategyID, sim := range s.activeSims {
@@ -1422,7 +1421,10 @@ func (s *SimulationService) GetRunningSimulations() []*dto.SimulationStatusDTO {
 		isRunning := sim.IsRunning
 		sim.mu.RUnlock()
 
-		if isRunning {
+		s.logger.Info("Found simulation for strategy ID=%d, isRunning=%v", strategyID, isRunning)
+
+		// Include all active simulations regardless of IsRunning flag
+		{
 			// Get active trades count
 			sim.tokensMu.RLock()
 			activeTrades := 0
@@ -1473,6 +1475,68 @@ func (s *SimulationService) GetRunningSimulations() []*dto.SimulationStatusDTO {
 			}
 
 			runningSimulations = append(runningSimulations, simDTO)
+		}
+	}
+
+	// Now add all simulations that are in 'running' state in the database as well
+	runningSimulationsDB, err := s.simulationRunRepo.GetByStatus("running", 10)
+	if err != nil {
+		s.logger.Error("Error fetching running simulations from database: %v", err)
+	} else {
+		s.logger.Info("Found %d running simulations in database", len(runningSimulationsDB))
+
+		// Check if we need to add any database simulations that weren't in our active map
+		for _, runDB := range runningSimulationsDB {
+			// Extract strategy ID from parameters
+			params := runDB.SimulationParameters
+			if strategyIDParam, ok := params["strategyID"]; ok {
+				strategyID := int64(strategyIDParam.(float64))
+
+				// Check if this simulation is already in our list
+				found := false
+				for _, simDTO := range runningSimulations {
+					if simDTO.StrategyID == strategyID {
+						found = true
+						break
+					}
+				}
+
+				// If not in our list, try to add it from the database
+				if !found {
+					s.logger.Info("Adding simulation for strategy ID=%d from database", strategyID)
+					strategy, err := s.strategyRepo.GetByID(strategyID)
+					if err != nil {
+						s.logger.Error("Error getting strategy %d: %v", strategyID, err)
+						continue
+					}
+
+					// Create a minimal DTO
+					simDTO := &dto.SimulationStatusDTO{
+						StrategyID:       strategyID,
+						StrategyName:     strategy.Name,
+						IsRunning:        true,
+						StartTime:        runDB.StartTime.Unix(),
+						ExecutionTimeSec: time.Since(runDB.StartTime).Seconds(),
+						// Set minimal values for other fields
+						TotalTrades:      0,
+						ActiveTrades:     0,
+						ProfitableTrades: 0,
+						LosingTrades:     0,
+						WinRate:          0,
+						TotalProfit:      0,
+						TotalLoss:        0,
+						AvgProfit:        0,
+						AvgLoss:          0,
+						MaxDrawdown:      0,
+						NetPnL:           0,
+						InitialBalance:   1000, // Default value
+						CurrentBalance:   1000, // Default value
+						ROI:              0,
+						SimConfig:        &dto.SimConfigDTO{},
+					}
+					runningSimulations = append(runningSimulations, simDTO)
+				}
+			}
 		}
 	}
 
