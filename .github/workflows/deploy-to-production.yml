@@ -45,6 +45,7 @@ jobs:
           
           # Frontend Configuration
           NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
+          NEXT_PUBLIC_WS_URL: ${{ secrets.NEXT_PUBLIC_WS_URL }}
         run: |
           # Required environment variables validation
           if [ -z "$DB_HOST" ]; then
@@ -99,6 +100,7 @@ jobs:
           
           # Frontend Configuration
           NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-/api}
+          NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL:-/ws}
           EOF
 
       - name: Setup SSH
