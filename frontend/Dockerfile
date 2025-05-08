@@ -17,9 +17,13 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Next.js collects completely anonymous telemetry data about general usage
-# Learn more here: https://nextjs.org/telemetry
-ENV NEXT_TELEMETRY_DISABLED 1
+# Add build arguments for API and WebSocket URLs
+ARG NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_WS_URL
+
+# Set environment variables for build time
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-/api}
+ENV NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL:-/ws}
 
 # Build the Next.js application
 RUN pnpm build

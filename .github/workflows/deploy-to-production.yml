@@ -165,6 +165,10 @@ jobs:
             
             echo "Building and starting Docker services..."
             docker compose down --remove-orphans
+            
+            # Build and run with explicitly set environment variables for the build
+            NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-/api} \
+            NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL:-/ws} \
             docker compose up -d --build
             
             # Clean up unused images
