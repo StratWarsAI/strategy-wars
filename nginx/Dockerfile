@@ -7,7 +7,7 @@ RUN rm /etc/nginx/conf.d/default.conf
 RUN mkdir -p /etc/nginx/ssl
 
 # Copy custom nginx config
-COPY nginx-ssl.conf /etc/nginx/nginx.conf
+COPY nginx-cloudflare.conf /etc/nginx/nginx.conf
 
 # Copy Cloudflare Origin certificates
 COPY origin.pem /etc/nginx/ssl/origin.pem
