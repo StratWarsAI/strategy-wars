@@ -102,26 +102,17 @@ jobs:
           EOF
 
       - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          
+      - name: Test SSH Connection
         env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           SERVER_HOST: ${{ secrets.SERVER_HOST }}
           SERVER_USER: ${{ secrets.SERVER_USER }}
         run: |
-          if [ -z "$SSH_PRIVATE_KEY" ]; then
-            echo "Error: SSH_PRIVATE_KEY is not set"
-            exit 1
-          fi
-          
-          mkdir -p ~/.ssh
-          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H $SERVER_HOST >> ~/.ssh/known_hosts
-          
-          # Test SSH connection
-          if ! ssh -q $SERVER_USER@$SERVER_HOST exit; then
-            echo "Error: SSH connection failed"
-            exit 1
-          fi
+          ssh -q $SERVER_USER@$SERVER_HOST exit || { echo "SSH connection failed"; exit 1; }
 
       - name: Deploy to Server
         env:
@@ -145,7 +136,7 @@ jobs:
               echo "Git repository exists. Cleaning up..."
               cd \$DEPLOY_PATH
               git fetch
-              git reset --hard origin/main
+              git reset --hard origin/production
             else
               echo "First-time deployment. Cloning repository..."
               rm -rf \$DEPLOY_PATH
