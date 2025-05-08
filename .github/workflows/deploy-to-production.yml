@@ -153,14 +153,17 @@ jobs:
           echo "Copying environment file..."
           scp .env $SERVER_USER@$SERVER_HOST:$DEPLOY_PATH/.env
           
+          # Copy the .env file to the backend directory
+          ssh $SERVER_USER@$SERVER_HOST "cp $DEPLOY_PATH/.env $DEPLOY_PATH/backend/.env"
+          
           echo "Starting Docker deployment..."
           ssh $SERVER_USER@$SERVER_HOST 'bash -s' << ENDSSH
             set -e  # Exit on any error
             cd $DEPLOY_PATH
             
             echo "Building and starting Docker services..."
-            docker compose down --remove-orphans
-            docker compose up -d --build
+            docker-compose down --remove-orphans
+            docker-compose up -d --build
             
             # Clean up unused images
             docker image prune -f
