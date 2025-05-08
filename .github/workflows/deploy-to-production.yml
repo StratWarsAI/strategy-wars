@@ -159,8 +159,8 @@ jobs:
             cd $DEPLOY_PATH
             
             echo "Building and starting Docker services..."
-            docker-compose down --remove-orphans
-            docker-compose up -d --build
+            docker compose down --remove-orphans
+            docker compose up -d --build
             
             # Clean up unused images
             docker image prune -f
