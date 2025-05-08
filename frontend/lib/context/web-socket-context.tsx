@@ -23,9 +23,21 @@ export const WebSocketProvider: React.FC<{children: React.ReactNode}> = ({ child
       socketRef.current.close();
     }
 
-    const ws = new WebSocket(process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8080/ws');
+    // Get WebSocket URL from environment or determine based on current protocol
+    let wsUrl = process.env.NEXT_PUBLIC_WS_URL;
+    
+    if (!wsUrl) {
+      // Auto-detect protocol based on current page protocol
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const host = window.location.host;
+      wsUrl = `${protocol}//${host}/ws`;
+    }
+    
+    console.log('Connecting to WebSocket URL:', wsUrl);
+    const ws = new WebSocket(wsUrl);
     
     ws.onopen = () => {
+      console.log('WebSocket connection established successfully');
       setIsConnected(true);
     };
     
@@ -48,6 +60,7 @@ export const WebSocketProvider: React.FC<{children: React.ReactNode}> = ({ child
     };
     
     ws.onclose = (event) => {
+      console.log('WebSocket connection closed', event.code, event.reason);
       setIsConnected(false);
       
       if (!document.hidden) {
@@ -56,6 +69,7 @@ export const WebSocketProvider: React.FC<{children: React.ReactNode}> = ({ child
     };
 
     ws.onerror = (error) => {
+      console.error('WebSocket error occurred:', error);
     };
     
     socketRef.current = ws;
