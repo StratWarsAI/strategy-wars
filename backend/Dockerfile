@@ -24,8 +24,8 @@ RUN apk --no-cache add ca-certificates tzdata
 # Copy the binary from the builder stage
 COPY --from=builder /api-server /app/api-server
 
-# Copy .env into root directory for the config loader to find
-COPY --from=builder /app/.env /.env
+# Create an empty .env file if it doesn't exist in the build context
+RUN touch /.env
 
 # Create directory for potential data storage
 RUN mkdir -p /app/data
