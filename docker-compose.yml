@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   postgres:
     image: postgres:15-alpine
@@ -10,6 +12,98 @@ services:
       - "5432:5432"
     volumes:
       - ./pgdata:/var/lib/postgresql/data
+    networks:
+      - strategy-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-pump_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: strategy_backend
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-pump_predictor_strategy}
+      DB_USER: ${DB_USER:-pump_user}
+      DB_PASS: ${DB_PASS:-pump_password}
+      SERVER_PORT: 8080
+      AUTOMATION_ENABLED: ${AUTOMATION_ENABLED:-false}
+      WEBSOCKET_URL: ${WEBSOCKET_URL}
+      AI_ENDPOINT: ${AI_ENDPOINT}
+      AI_API_KEY: ${AI_API_KEY}
+      AI_MODEL: ${AI_MODEL}
+      STRATEGY_GEN_INTERVAL: ${STRATEGY_GEN_INTERVAL:-60}
+      PERFORMANCE_ANALYSIS_INTERVAL: ${PERFORMANCE_ANALYSIS_INTERVAL:-15}
+      STRATEGIES_PER_INTERVAL: ${STRATEGIES_PER_INTERVAL:-2}
+      MAX_CONCURRENT_SIMULATIONS: ${MAX_CONCURRENT_SIMULATIONS:-2}
+    # Comment out exposed ports when using nginx
+    # ports:
+    #   - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - strategy-network
+    restart: unless-stopped
+
+  collector:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.collector
+    container_name: strategy_collector
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-pump_predictor_strategy}
+      DB_USER: ${DB_USER:-pump_user}
+      DB_PASS: ${DB_PASS:-pump_password}
+      WEBSOCKET_URL: ${WEBSOCKET_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - strategy-network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: strategy_frontend
+    environment:
+      NEXT_PUBLIC_API_URL: /api
+      
+    # Comment out exposed ports when using nginx
+    # ports:
+    #   - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - strategy-network
+    restart: unless-stopped
+
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: strategy_nginx
+    ports:
+      - "80:80"
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - strategy-network
+    restart: unless-stopped
+
+networks:
+  strategy-network:
+    driver: bridge
 
 volumes:
   pgdata:

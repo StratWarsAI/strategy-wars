@@ -1,0 +1,20 @@
+# Git files
+.git
+.gitignore
+
+# Build artifacts
+/bin
+/tmp
+
+# Dev and environment files
+.env
+.env.*
+*.log
+
+# Tests
+*_test.go
+/tests
+
+# Other
+README.md
+.DS_Store

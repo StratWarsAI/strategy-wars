@@ -1,0 +1,178 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [ production ] 
+  workflow_dispatch:  
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Create ENV file
+        env:
+          # Database Configuration
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASS: ${{ secrets.DB_PASS }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          
+          # Application Configuration
+          SERVER_PORT: ${{ secrets.SERVER_PORT }}
+          APP_ENV: ${{ secrets.APP_ENV }}
+          LOG_LEVEL: ${{ secrets.LOG_LEVEL }}
+          
+          # Pump Configuration
+          WEBSOCKET_URL: ${{ secrets.WEBSOCKET_URL }}
+          
+          # AI Configuration
+          AI_ENDPOINT: ${{ secrets.AI_ENDPOINT }}
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
+          AI_MODEL: ${{ secrets.AI_MODEL }}
+          
+          # Automation Configuration
+          AUTOMATION_ENABLED: ${{ secrets.AUTOMATION_ENABLED }}
+          STRATEGY_GEN_INTERVAL: ${{ secrets.STRATEGY_GEN_INTERVAL }}
+          PERFORMANCE_ANALYSIS_INTERVAL: ${{ secrets.PERFORMANCE_ANALYSIS_INTERVAL }}
+          STRATEGIES_PER_INTERVAL: ${{ secrets.STRATEGIES_PER_INTERVAL }}
+          MAX_CONCURRENT_SIMULATIONS: ${{ secrets.MAX_CONCURRENT_SIMULATIONS }}
+          
+          # Frontend Configuration
+          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
+        run: |
+          # Required environment variables validation
+          if [ -z "$DB_HOST" ]; then
+            echo "Error: DB_HOST is not set"
+            exit 1
+          fi
+          if [ -z "$DB_USER" ]; then
+            echo "Error: DB_USER is not set"
+            exit 1
+          fi
+          if [ -z "$DB_PASS" ]; then
+            echo "Error: DB_PASS is not set"
+            exit 1
+          fi
+          if [ -z "$DB_NAME" ]; then
+            echo "Error: DB_NAME is not set"
+            exit 1
+          fi
+          if [ -z "$WEBSOCKET_URL" ]; then
+            echo "Error: WEBSOCKET_URL is not set"
+            exit 1
+          fi
+          
+          # Create .env file
+          cat > .env << EOF
+          # Database Configuration
+          DB_HOST=${DB_HOST}
+          DB_PORT=${DB_PORT:-5432}
+          DB_USER=${DB_USER}
+          DB_PASS=${DB_PASS}
+          DB_NAME=${DB_NAME}
+          
+          # Application Configuration
+          SERVER_PORT=${SERVER_PORT:-8080}
+          APP_ENV=${APP_ENV:-production}
+          LOG_LEVEL=${LOG_LEVEL:-info}
+          
+          # Pump Configuration
+          WEBSOCKET_URL=${WEBSOCKET_URL}
+          
+          # AI Configuration
+          AI_ENDPOINT=${AI_ENDPOINT}
+          AI_API_KEY=${AI_API_KEY}
+          AI_MODEL=${AI_MODEL}
+          
+          # Automation Configuration
+          AUTOMATION_ENABLED=${AUTOMATION_ENABLED:-true}
+          STRATEGY_GEN_INTERVAL=${STRATEGY_GEN_INTERVAL:-60}
+          PERFORMANCE_ANALYSIS_INTERVAL=${PERFORMANCE_ANALYSIS_INTERVAL:-15}
+          STRATEGIES_PER_INTERVAL=${STRATEGIES_PER_INTERVAL:-2}
+          MAX_CONCURRENT_SIMULATIONS=${MAX_CONCURRENT_SIMULATIONS:-2}
+          
+          # Frontend Configuration
+          NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-/api}
+          EOF
+
+      - name: Setup SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+        run: |
+          if [ -z "$SSH_PRIVATE_KEY" ]; then
+            echo "Error: SSH_PRIVATE_KEY is not set"
+            exit 1
+          fi
+          
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H $SERVER_HOST >> ~/.ssh/known_hosts
+          
+          # Test SSH connection
+          if ! ssh -q $SERVER_USER@$SERVER_HOST exit; then
+            echo "Error: SSH connection failed"
+            exit 1
+          fi
+
+      - name: Deploy to Server
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH || '~/strategy-wars' }}
+        run: |
+          echo "Starting deployment..."
+          
+          # Prepare the deployment directory on the server
+          ssh $SERVER_USER@$SERVER_HOST 'bash -s' << ENDSSH
+            set -e  # Exit on any error
+            echo "Preparing deployment directory..."
+            
+            # Create directory if it doesn't exist
+            DEPLOY_PATH="${DEPLOY_PATH}"
+            mkdir -p \$DEPLOY_PATH
+            
+            # Clean up existing files (if any)
+            if [ -d "\$DEPLOY_PATH/.git" ]; then
+              echo "Git repository exists. Cleaning up..."
+              cd \$DEPLOY_PATH
+              git fetch
+              git reset --hard origin/main
+            else
+              echo "First-time deployment. Cloning repository..."
+              rm -rf \$DEPLOY_PATH
+              mkdir -p \$DEPLOY_PATH
+            fi
+          ENDSSH
+          
+          echo "Copying files to server..."
+          # rsync project files (exclude git, node_modules, etc.)
+          rsync -avz --exclude '.git' --exclude 'node_modules' --exclude 'pgdata' \
+            --exclude '.next' --exclude '.turbo' --exclude 'dist' \
+            ./ $SERVER_USER@$SERVER_HOST:$DEPLOY_PATH/
+          
+          echo "Copying environment file..."
+          scp .env $SERVER_USER@$SERVER_HOST:$DEPLOY_PATH/.env
+          
+          echo "Starting Docker deployment..."
+          ssh $SERVER_USER@$SERVER_HOST 'bash -s' << ENDSSH
+            set -e  # Exit on any error
+            cd $DEPLOY_PATH
+            
+            echo "Building and starting Docker services..."
+            docker-compose down --remove-orphans
+            docker-compose up -d --build
+            
+            # Clean up unused images
+            docker image prune -f
+            
+            echo "Deployment completed successfully!"
+          ENDSSH
