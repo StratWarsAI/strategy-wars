@@ -23,15 +23,11 @@ export const WebSocketProvider: React.FC<{children: React.ReactNode}> = ({ child
       socketRef.current.close();
     }
 
-    // Get WebSocket URL from environment or determine based on current protocol
-    let wsUrl = process.env.NEXT_PUBLIC_WS_URL;
-    
-    if (!wsUrl) {
-      // Auto-detect protocol based on current page protocol
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const host = window.location.host;
-      wsUrl = `${protocol}//${host}/ws`;
-    }
+    // Get WebSocket URL from environment or use a secure default for production
+    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 
+                 (window.location.protocol === 'https:' ? 
+                  `wss://${window.location.host}/ws` : 
+                  'ws://localhost:8080/ws');
     
     console.log('Connecting to WebSocket URL:', wsUrl);
     const ws = new WebSocket(wsUrl);
