@@ -26,7 +26,6 @@ export function useTopStrategies() {
       } catch (err) {
         console.error('Error fetching strategies:', err);
         setError(err instanceof Error ? err : new Error('Failed to fetch strategies'));
-        // Hata durumunda da loading'i kapatıyoruz
         setIsLoading(false);
       } finally {
         setIsLoading(false);
