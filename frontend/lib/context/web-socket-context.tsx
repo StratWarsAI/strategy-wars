@@ -33,7 +33,7 @@ export const WebSocketProvider: React.FC<{children: React.ReactNode}> = ({ child
     const ws = new WebSocket(wsUrl);
     
     ws.onopen = () => {
-      console.log('WebSocket connection established');
+      console.log('WebSocket connection established successfully');
       setIsConnected(true);
     };
     
