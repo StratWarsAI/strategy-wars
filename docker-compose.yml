@@ -76,6 +76,7 @@ services:
     container_name: strategy_frontend
     environment:
       NEXT_PUBLIC_API_URL: /api
+      NEXT_PUBLIC_WS_URL: /ws
       
     # Comment out exposed ports when using nginx
     # ports:
