@@ -8,23 +8,27 @@ import (
 
 	"github.com/StratWarsAI/strategy-wars/internal/api/dto"
 	"github.com/StratWarsAI/strategy-wars/internal/pkg/logger"
+	"github.com/StratWarsAI/strategy-wars/internal/repository"
 	"github.com/StratWarsAI/strategy-wars/internal/service"
 )
 
 type StrategyHandler struct {
-	service   service.StrategyServiceInterface
-	logger    *logger.Logger
-	validator *validator.Validate
+	service            service.StrategyServiceInterface
+	logger             *logger.Logger
+	validator          *validator.Validate
+	strategyMetricRepo repository.StrategyMetricRepositoryInterface
 }
 
 func NewStrategyHandler(
 	strategyService service.StrategyServiceInterface,
 	logger *logger.Logger,
+	strategyMetricRepo repository.StrategyMetricRepositoryInterface,
 ) *StrategyHandler {
 	return &StrategyHandler{
-		service:   strategyService,
-		logger:    logger,
-		validator: validator.New(),
+		service:            strategyService,
+		logger:             logger,
+		validator:          validator.New(),
+		strategyMetricRepo: strategyMetricRepo,
 	}
 }
 
@@ -129,8 +133,31 @@ func (h *StrategyHandler) GetByID(c *fiber.Ctx) error {
 		})
 	}
 
+	// Get latest metrics for this strategy
+	latestMetric, err := h.strategyMetricRepo.GetLatestByStrategy(int64(strategyID))
+	
 	// Convert to response DTO
 	responseDto := dto.NewStrategyResponseDto(strategy)
+	
+	// Add metrics data if available
+	if err == nil && latestMetric != nil {
+		// Transform the metric data into the expected frontend format
+		responseDto.Metrics = &dto.StrategyMetricsDto{
+			TotalTrades:      latestMetric.TotalTrades,
+			WinningTrades:    latestMetric.SuccessfulTrades,
+			LosingTrades:     latestMetric.TotalTrades - latestMetric.SuccessfulTrades,
+			WinRate:          latestMetric.WinRate,
+			AverageProfitPct: latestMetric.AvgProfit,
+			AverageLossPct:   latestMetric.AvgLoss,
+			Balance:          latestMetric.CurrentBalance,
+			InitialBalance:   latestMetric.InitialBalance,
+			ROI:              latestMetric.ROI,
+			// Default values for fields not directly in the database
+			LargestWinPct:    0,
+			LargestLossPct:   0, 
+			ProfitFactor:     1.0,
+		}
+	}
 
 	return c.JSON(responseDto)
 }
@@ -150,10 +177,30 @@ func (h *StrategyHandler) GetPublicStrategies(c *fiber.Ctx) error {
 		})
 	}
 
-	// Convert to response DTOs
+	// Convert to response DTOs with metrics
 	responseDtos := make([]dto.StrategyResponseDto, len(strategies))
 	for i, strategy := range strategies {
 		responseDtos[i] = dto.NewStrategyResponseDto(strategy)
+		
+		// Get latest metrics for this strategy
+		latestMetric, err := h.strategyMetricRepo.GetLatestByStrategy(strategy.ID)
+		if err == nil && latestMetric != nil {
+			// Transform the metric data into the expected frontend format
+			responseDtos[i].Metrics = &dto.StrategyMetricsDto{
+				TotalTrades:      latestMetric.TotalTrades,
+				WinningTrades:    latestMetric.SuccessfulTrades,
+				LosingTrades:     latestMetric.TotalTrades - latestMetric.SuccessfulTrades,
+				WinRate:          latestMetric.WinRate,
+				AverageProfitPct: latestMetric.AvgProfit,
+				AverageLossPct:   latestMetric.AvgLoss,
+				Balance:          latestMetric.CurrentBalance,
+				InitialBalance:   latestMetric.InitialBalance,
+				ROI:              latestMetric.ROI,
+				LargestWinPct:    0,
+				LargestLossPct:   0,
+				ProfitFactor:     1.0,
+			}
+		}
 	}
 
 	return c.JSON(responseDtos)
@@ -174,10 +221,31 @@ func (h *StrategyHandler) GetTopStrategies(c *fiber.Ctx) error {
 		})
 	}
 
-	// Fetch latest metrics for each strategy
+	// Fetch latest metrics for each strategy and prepare response
 	responseDtos := make([]dto.StrategyResponseDto, len(strategies))
 	for i, strategy := range strategies {
+		// Convert to response DTO
 		responseDtos[i] = dto.NewStrategyResponseDto(strategy)
+		
+		// Get latest metrics for this strategy
+		latestMetric, err := h.strategyMetricRepo.GetLatestByStrategy(strategy.ID)
+		if err == nil && latestMetric != nil {
+			// Transform the metric data into the expected frontend format
+			responseDtos[i].Metrics = &dto.StrategyMetricsDto{
+				TotalTrades:      latestMetric.TotalTrades,
+				WinningTrades:    latestMetric.SuccessfulTrades,
+				LosingTrades:     latestMetric.TotalTrades - latestMetric.SuccessfulTrades,
+				WinRate:          latestMetric.WinRate,
+				AverageProfitPct: latestMetric.AvgProfit,
+				AverageLossPct:   latestMetric.AvgLoss,
+				Balance:          latestMetric.CurrentBalance,
+				InitialBalance:   latestMetric.InitialBalance,
+				ROI:              latestMetric.ROI,
+				LargestWinPct:    0,
+				LargestLossPct:   0,
+				ProfitFactor:     1.0,
+			}
+		}
 	}
 
 	return c.JSON(responseDtos)

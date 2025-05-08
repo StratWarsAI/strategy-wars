@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Disable static generation for pages that depend on API
+  output: 'standalone',
+  
   images: {
     remotePatterns: [
       {

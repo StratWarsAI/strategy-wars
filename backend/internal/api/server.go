@@ -26,6 +26,8 @@ type Server struct {
 	wsClientHandler     *websocket.ClientWSHandler
 	strategyService     service.StrategyServiceInterface
 	strategyHandler     *handlers.StrategyHandler
+	dashboardService    service.DashboardServiceInterface
+	dashboardHandler    *handlers.DashboardHandler
 	aiService           *service.AIService
 	simulationService   *service.SimulationService
 	automationService   *service.AutomationService
@@ -64,13 +66,16 @@ func NewServer(port int, db *sql.DB, cfg *config.Config, logger *logger.Logger) 
 	simulationRunRepo := repository.NewSimulationRunRepository(db)
 	simulationEventRepo := repository.NewSimulationEventRepository(db)
 	simulationResultRepo := repository.NewSimulationResultRepository(db)
+	dashboardRepo := repository.NewDashboardRepository(db)
 
 	// Create basic services
 	dataService := service.NewDataService(db, logger)
 	strategyService := service.NewStrategyService(strategyRepo, strategyMetricRepo, logger)
+	dashboardService := service.NewDashboardService(dashboardRepo, simulatedTradeRepo, logger)
 
 	// Create handlers
-	strategyHandler := handlers.NewStrategyHandler(strategyService, logger)
+	strategyHandler := handlers.NewStrategyHandler(strategyService, logger, strategyMetricRepo)
+	dashboardHandler := handlers.NewDashboardHandler(dashboardService, logger)
 
 	// Create AI and automation services
 	aiService := service.NewAIService(
@@ -137,6 +142,8 @@ func NewServer(port int, db *sql.DB, cfg *config.Config, logger *logger.Logger) 
 		wsClientHandler:     wsClientHandler,
 		strategyService:     strategyService,
 		strategyHandler:     strategyHandler,
+		dashboardService:    dashboardService,
+		dashboardHandler:    dashboardHandler,
 		aiService:           aiService,
 		simulationService:   simulationService,
 		automationService:   automationService,
@@ -207,6 +214,13 @@ func (s *Server) registerRoutes(aiHandler *handlers.AIHandler) {
 		aiHandler.RegisterRoutes(api)
 	} else {
 		s.logger.Warn("AI handler is nil, routes not registered")
+	}
+	
+	// Register dashboard routes
+	if s.dashboardHandler != nil {
+		s.dashboardHandler.RegisterRoutes(api)
+	} else {
+		s.logger.Warn("Dashboard handler is nil, routes not registered")
 	}
 }
 

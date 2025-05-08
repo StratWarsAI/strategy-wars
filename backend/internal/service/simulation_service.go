@@ -1748,16 +1748,16 @@ func (s *SimulationService) sendSimulationStatusUpdate(ctx *SimulationContext) {
 	}
 
 	// Calculate average profit per trade
-	//avgProfit := 0.0
-	//if profitableTrades > 0 {
-	//	avgProfit = totalProfit / float64(profitableTrades)
-	//}
+	avgProfit := 0.0
+	if profitableTrades > 0 {
+		avgProfit = totalProfit / float64(profitableTrades)
+	}
 
-	// Calculate average loss per trade
-	// avgLoss := 0.0
-	// if losingTrades > 0 {
-	// 	avgLoss = totalLoss / float64(losingTrades)
-	// }
+	//Calculate average loss per trade
+	avgLoss := 0.0
+	if losingTrades > 0 {
+		avgLoss = totalLoss / float64(losingTrades)
+	}
 
 	// Send status event
 	s.sendSimulationEvent(ctx, "simulation_status", map[string]interface{}{
@@ -1772,37 +1772,38 @@ func (s *SimulationService) sendSimulationStatusUpdate(ctx *SimulationContext) {
 	})
 
 	// Save or update current metrics to database for running simulations
-	// if s.strategyMetricRepo != nil && totalTrades > 0 {
-	// 	// Calculate max drawdown (simplified version for running simulations)
-	// 	maxDrawdown := 0.0
-	// 	if initialBalance > currentBalance {
-	// 		maxDrawdown = (initialBalance - currentBalance) / initialBalance * 100.0
-	// 	}
+	if s.strategyMetricRepo != nil && totalTrades > 0 {
+		// Calculate max drawdown (simplified version for running simulations)
+		maxDrawdown := 0.0
+		if initialBalance > currentBalance {
+			maxDrawdown = (initialBalance - currentBalance) / initialBalance * 100.0
+		}
 
-	// 	// Create strategy metric object
-	// 	strategyMetric := &models.StrategyMetric{
-	// 		StrategyID:       ctx.StrategyID,
-	// 		SimulationRunID:  &ctx.SimulationRunID,
-	// 		WinRate:          winRate,
-	// 		AvgProfit:        avgProfit,
-	// 		AvgLoss:          avgLoss,
-	// 		MaxDrawdown:      maxDrawdown,
-	// 		TotalTrades:      totalTrades,
-	// 		SuccessfulTrades: profitableTrades,
-	// 		RiskScore:        ctx.Strategy.RiskScore,
-	// 		ROI:              roi,
-	// 		CurrentBalance:   currentBalance,
-	// 		InitialBalance:   initialBalance,
-	// 		CreatedAt:        time.Now(),
-	// 	}
+		// Create strategy metric object
+		strategyMetric := &models.StrategyMetric{
+			StrategyID:       ctx.StrategyID,
+			SimulationRunID:  &ctx.SimulationRunID,
+			WinRate:          winRate,
+			AvgProfit:        avgProfit,
+			AvgLoss:          avgLoss,
+			MaxDrawdown:      maxDrawdown,
+			TotalTrades:      totalTrades,
+			SuccessfulTrades: profitableTrades,
+			RiskScore:        ctx.Strategy.RiskScore,
+			ROI:              roi,
+			CurrentBalance:   currentBalance,
+			InitialBalance:   initialBalance,
+			CreatedAt:        time.Now(),
+		}
 
-	// 	// Use UpdateLatestByStrategy to update existing metric or create new one
-	// 	err := s.strategyMetricRepo.UpdateLatestByStrategy(strategyMetric)
-	// 	if err != nil {
-	// 		s.logger.Error("Error updating real-time strategy metrics: %v", err)
-	// 	} else {
-	// 		s.logger.Info("Updated real-time strategy metrics for strategy %d", ctx.StrategyID)
-
+		// Use UpdateLatestByStrategy to update existing metric or create new one
+		err := s.strategyMetricRepo.UpdateLatestByStrategy(strategyMetric)
+		if err != nil {
+			s.logger.Error("Error updating real-time strategy metrics: %v", err)
+		} else {
+			s.logger.Info("Updated real-time strategy metrics for strategy %d", ctx.StrategyID)
+		}
+	}
 	// 		// Also save a simulation result for periodic analysis
 	// 		// First check if we already have a simulation result for this strategy and run
 	// 		existingResults, err := s.simulationResultRepo.GetBySimulationRun(ctx.SimulationRunID)

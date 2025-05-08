@@ -12,5 +12,11 @@ export const navigationItems: NavItem[] = [
     href: '/strategy-ai',
     icon: 'brain',
     label: 'Strategy AI'
+  },
+  {
+    title: "Strategies",
+    href: '/strategies',
+    icon: 'settings',
+    label: 'Strategies'
   }
 ];

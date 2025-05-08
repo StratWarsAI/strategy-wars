@@ -1,5 +1,6 @@
 import { SimulationSummary } from "@/types";
 import { Strategy } from "@/types/strategy.type";
+import { DashboardStats, DashboardCharts, CompleteDashboard } from "@/types/dashboard.type";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8080/ws';
@@ -165,6 +166,60 @@ export async function fetchTopStrategies(): Promise<Strategy[]> {
     return response.json();
   } catch (error) {
     console.error("Error fetching top strategies:", error);
+    throw error;
+  }
+}
+
+/**
+ * Fetch dashboard statistics
+ */
+export async function getDashboardStats(timeframe: string = '24h'): Promise<DashboardStats> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/dashboard/stats?timeframe=${timeframe}`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch dashboard stats: ${response.statusText}`);
+    }
+    
+    return response.json();
+  } catch (error) {
+    console.error("Error fetching dashboard stats:", error);
+    throw error;
+  }
+}
+
+/**
+ * Fetch dashboard chart data
+ */
+export async function getDashboardCharts(timeframe: string = '7d'): Promise<DashboardCharts> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/dashboard/charts?timeframe=${timeframe}`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch dashboard charts: ${response.statusText}`);
+    }
+    
+    return response.json();
+  } catch (error) {
+    console.error("Error fetching dashboard charts:", error);
+    throw error;
+  }
+}
+
+/**
+ * Fetch complete dashboard data
+ */
+export async function getCompleteDashboard(timeframe: string = '24h'): Promise<CompleteDashboard> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/dashboard/complete?timeframe=${timeframe}`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch complete dashboard: ${response.statusText}`);
+    }
+    
+    return response.json();
+  } catch (error) {
+    console.error("Error fetching complete dashboard:", error);
     throw error;
   }
 }

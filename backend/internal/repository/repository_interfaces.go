@@ -8,6 +8,20 @@ import (
 	"github.com/StratWarsAI/strategy-wars/internal/models"
 )
 
+// DashboardRepositoryInterface defines methods for dashboard data retrieval
+type DashboardRepositoryInterface interface {
+	GetTotalBalance() (float64, error)
+	GetBalanceChange(timeframe string) (float64, float64, error) // Returns (change, changePercent)
+	GetTradingStats() (int, int, int, float64, error) // Returns (totalTrades, winningTrades, losingTrades, winRate)
+	GetActiveTradeCount() (int, error)
+	GetAverageHoldTime() (string, error)
+	GetTopPerformingStrategy() (*models.Strategy, float64, int, error) // Returns (strategy, ROI, tradeCount)
+	GetMarketConditions() (string, int, error) // Returns (marketStatus, volatilityIndex)
+	GetPerformanceHistory(days int) ([]models.PerformanceDataPoint, error)
+	GetStrategyDistribution(limit int) ([]models.StrategyDistribution, error)
+	GetRecentPerformance() ([]models.RecentPerformance, error)
+}
+
 // TokenRepositoryInterface defines the interface for token repository operations
 type TokenRepositoryInterface interface {
 	Save(token *models.Token) (int64, error)

@@ -53,19 +53,27 @@ export function useTopStrategies() {
               playUpdateSound(event.roi > (strategy.metrics?.roi || 0));
             }
             
+            const updatedMetrics = {
+              ...(strategy.metrics || {}),
+              totalTrades: event.totalTrades,
+              winningTrades: event.profitableTrades,
+              losingTrades: event.losingTrades,
+              winRate: event.winRate,
+              roi: event.roi,
+              balance: event.currentBalance,
+              initialBalance: event.initialBalance,
+              // Ensure all required properties have default values
+              averageProfitPct: strategy.metrics?.averageProfitPct || 0,
+              averageLossPct: strategy.metrics?.averageLossPct || 0,
+              largestWinPct: strategy.metrics?.largestWinPct || 0,
+              largestLossPct: strategy.metrics?.largestLossPct || 0,
+              profitFactor: strategy.metrics?.profitFactor || 0
+            };
+            
             return {
               ...strategy,
-              metrics: {
-                ...strategy.metrics,
-                totalTrades: event.totalTrades,
-                winningTrades: event.profitableTrades,
-                losingTrades: event.losingTrades,
-                winRate: event.winRate, // Backend değerini doğrudan alıyoruz
-                roi: event.roi, // Backend değerini doğrudan alıyoruz
-                balance: event.currentBalance,
-                initialBalance: event.initialBalance
-              }
-            };
+              metrics: updatedMetrics
+            } as Strategy;
           }
           return strategy;
         })

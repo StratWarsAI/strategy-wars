@@ -18,6 +18,9 @@ const PAGE_TITLES: Record<string, { title: string }> = {
   },
   '/strategy-ai': { 
     title: 'Strategy AI'
+  },
+  '/strategies': {
+    title: 'Trading Strategies'
   }
 };
 

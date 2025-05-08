@@ -26,7 +26,6 @@ export const WebSocketProvider: React.FC<{children: React.ReactNode}> = ({ child
     const ws = new WebSocket(process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8080/ws');
     
     ws.onopen = () => {
-      console.log('WebSocket connected');
       setIsConnected(true);
     };
     
@@ -35,26 +34,20 @@ export const WebSocketProvider: React.FC<{children: React.ReactNode}> = ({ child
         const data = JSON.parse(event.data);
         setLastMessage(data);
       } catch (error) {
-        console.error('Failed to parse WebSocket message', error);
-        
-        console.log('Raw received data:', event.data);
         
         try {
           const jsonPattern = /({[\s\S]*}|\[[\s\S]*\])/;
           const match = event.data.match(jsonPattern);
           if (match && match[0]) {
             const extractedData = JSON.parse(match[0]);
-            console.log('Successfully parsed extracted JSON');
             setLastMessage(extractedData);
           }
         } catch (secondError) {
-          console.error('Failed to extract valid JSON', secondError);
         }
       }
     };
     
     ws.onclose = (event) => {
-      console.log('WebSocket disconnected', event.code, event.reason);
       setIsConnected(false);
       
       if (!document.hidden) {
@@ -63,7 +56,6 @@ export const WebSocketProvider: React.FC<{children: React.ReactNode}> = ({ child
     };
 
     ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
     };
     
     socketRef.current = ws;
@@ -75,7 +67,6 @@ export const WebSocketProvider: React.FC<{children: React.ReactNode}> = ({ child
     }
     
     reconnectTimeoutRef.current = setTimeout(() => {
-      console.log('Attempting to reconnect...');
       connectWebSocket();
     }, 3000);
   };
@@ -84,12 +75,9 @@ export const WebSocketProvider: React.FC<{children: React.ReactNode}> = ({ child
     if (document.hidden) {
       // }
     } else {
-      // Tab is now visible again
-      console.log('Tab visible, checking connection');
       
       // Check if we need to reconnect
       if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
-        console.log('Connection lost while tab was inactive, reconnecting');
         connectWebSocket();
       }
     }
@@ -132,9 +120,7 @@ export const WebSocketProvider: React.FC<{children: React.ReactNode}> = ({ child
   const sendMessage = (message: any) => {
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
       socketRef.current.send(JSON.stringify(message));
-    } else {
-      console.warn('Cannot send message, socket is not connected');
-    }
+    } 
   };
   
   return (

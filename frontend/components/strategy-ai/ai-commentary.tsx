@@ -203,9 +203,7 @@ export function AICommentary({ strategy1, strategy2, aiAnalysis }: AICommentaryP
   
   // Effect for AI analysis updates
   useEffect(() => {
-    if (aiAnalysis) {
-      console.log("Received AI analysis:", aiAnalysis);
-      
+    if (aiAnalysis) {      
       setCurrentCommentary({
         id: aiAnalysis.timestamp,
         timestamp: aiAnalysis.timestamp * 1000, // Convert from Unix timestamp

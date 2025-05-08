@@ -7,6 +7,13 @@ import (
 	"github.com/StratWarsAI/strategy-wars/internal/models"
 )
 
+// DashboardServiceInterface defines methods for dashboard service
+type DashboardServiceInterface interface {
+	GetDashboardStats(timeframe string) (*models.Dashboard, error)
+	GetDashboardCharts(timeframe string) (*models.Dashboard, error)
+	GetCompleteDashboard(timeframe string) (*models.Dashboard, error)
+}
+
 // StrategyServiceInterface defines the interface for strategy service
 type StrategyServiceInterface interface {
 	CreateStrategy(strategy *models.Strategy) (int64, error)
